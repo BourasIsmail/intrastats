@@ -5,6 +5,7 @@ import { api, post, put } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useTerritoire } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
+import { Modal } from "@/components/Modal";
 import { Select } from "@/components/ui";
 import type { CentreSummary, Page, PersonnelDto } from "@/lib/types";
 
@@ -48,6 +49,7 @@ export default function PersonnelPage() {
   const [message, setMessage] = useState<{ ton: "ok" | "bad"; texte: string } | null>(null);
   const [edition, setEdition] = useState<{ id: number | null; form: Formulaire } | null>(null);
   const [envoi, setEnvoi] = useState(false);
+  const [erreurForm, setErreurForm] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => { setRecherche(q); setPage(0); }, 300);
@@ -78,6 +80,7 @@ export default function PersonnelPage() {
 
   function nouveau() {
     setMessage(null);
+    setErreurForm(null);
     setEdition({ id: null, form: vide(user?.role === "PROVINCIAL" && user.provinceId ? String(user.provinceId) : "") });
   }
 
@@ -85,8 +88,8 @@ export default function PersonnelPage() {
     e.preventDefault();
     if (!edition) return;
     const f = edition.form;
-    if (!f.nom.trim() || !f.prenom.trim()) return setMessage({ ton: "bad", texte: t("pers.erreurObligatoires") });
-    if (!f.centreId && !f.provinceId) return setMessage({ ton: "bad", texte: t("pers.erreurProvince") });
+    if (!f.nom.trim() || !f.prenom.trim()) return setErreurForm(t("pers.erreurObligatoires"));
+    if (!f.centreId && !f.provinceId) return setErreurForm(t("pers.erreurProvince"));
     const corps = {
       matricule: f.matricule, nom: f.nom, prenom: f.prenom, cin: f.cin, dateNaissance: f.dateNaissance || null,
       lieuNaissance: f.lieuNaissance, sexe: f.sexe || null, dateRecrutement: f.dateRecrutement || null,
@@ -97,6 +100,7 @@ export default function PersonnelPage() {
     };
     setEnvoi(true);
     setMessage(null);
+    setErreurForm(null);
     try {
       if (edition.id) await put<PersonnelDto>(`/api/personnel/${edition.id}`, corps);
       else await post<PersonnelDto>("/api/personnel", corps);
@@ -104,7 +108,7 @@ export default function PersonnelPage() {
       setEdition(null);
       setMessage({ ton: "ok", texte: t("pers.enregistre") });
     } catch (err) {
-      setMessage({ ton: "bad", texte: messageErreur(err) });
+      setErreurForm(messageErreur(err));
     } finally {
       setEnvoi(false);
     }
@@ -125,13 +129,13 @@ export default function PersonnelPage() {
           <h1>{t("pers.titre")}</h1>
           <div className="sub">{t("pers.compte", { n: fmt(total) })}</div>
         </div>
-        {peutGerer && !edition && <button className="btn primary" type="button" onClick={nouveau}>{t("pers.ajouter")}</button>}
+        {peutGerer && <button className="btn primary" type="button" onClick={nouveau}>{t("pers.ajouter")}</button>}
       </div>
       {message && <div className={`banner ${message.ton}`} role={message.ton === "bad" ? "alert" : "status"}>{message.texte}</div>}
 
       {edition && (
-        <form className="card" onSubmit={enregistrer} noValidate>
-          <h2>{edition.id ? t("pers.titreModif") : t("pers.titreNouveau")}</h2>
+        <Modal titre={edition.id ? t("pers.titreModif") : t("pers.titreNouveau")} large onClose={() => setEdition(null)}>
+        <form onSubmit={enregistrer} noValidate style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div className="filters-grid">
             {champ("p-nom", t("pers.nom"), edition.form.nom, "nom", { maxLength: 60 })}
             {champ("p-prenom", t("pers.prenom"), edition.form.prenom, "prenom", { maxLength: 60 })}
@@ -166,11 +170,13 @@ export default function PersonnelPage() {
             <input type="checkbox" checked={edition.form.actif} onChange={(e) => maj({ actif: e.target.checked })} />
             {t("pers.enActivite")}
           </label>
-          <div className="actions" style={{ marginTop: 12 }}>
+          {erreurForm && <div className="banner bad" role="alert">{erreurForm}</div>}
+          <div className="actions">
             <button className="btn primary" type="submit" disabled={envoi}>{t("action.enregistrer")}</button>
             <button className="btn" type="button" onClick={() => setEdition(null)}>{t("action.annuler")}</button>
           </div>
         </form>
+        </Modal>
       )}
 
       <section className="card">
@@ -215,7 +221,7 @@ export default function PersonnelPage() {
                   <td><span className={`chip ${p.actif ? "ok" : "grey"}`}>{t(p.actif ? "pers.actif" : "pers.inactif")}</span></td>
                   <td style={{ textAlign: "end" }}>
                     {peutGerer && <button className="btn link" type="button"
-                      onClick={() => { setMessage(null); setEdition({ id: p.id, form: depuis(p) }); window.scrollTo({ top: 0 }); }}>{t("action.modifier")}</button>}
+                      onClick={() => { setMessage(null); setErreurForm(null); setEdition({ id: p.id, form: depuis(p) }); }}>{t("action.modifier")}</button>}
                   </td>
                 </tr>
               ))}

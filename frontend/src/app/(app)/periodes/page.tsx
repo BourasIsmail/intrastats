@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { post } from "@/lib/api";
+import { Modal } from "@/components/Modal";
 import { usePeriodes } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import type { CleTraduction } from "@/lib/i18n/fr";
@@ -14,6 +15,8 @@ export default function PeriodesPage() {
   const [annee, setAnnee] = useState(aujourdhui.getFullYear());
   const [anneeStat, setAnneeStat] = useState("");
   const [comptee, setComptee] = useState(true);
+  const [ouvert, setOuvert] = useState(false);
+  const [erreurForm, setErreurForm] = useState<string | null>(null);
   const [message, setMessage] = useState<{ ton: "ok" | "bad"; texte: string } | null>(null);
 
   async function agir(fn: () => Promise<unknown>, succes: CleTraduction) {
@@ -27,17 +30,28 @@ export default function PeriodesPage() {
     }
   }
 
-  function creer(e: FormEvent) {
+  async function creer(e: FormEvent) {
     e.preventDefault();
-    agir(() => post("/api/periodes", { mois, annee, anneeStat: anneeStat || String(annee), compteeEnStats: comptee }), "periodes.msgCreee");
+    setErreurForm(null);
+    try {
+      await post("/api/periodes", { mois, annee, anneeStat: anneeStat || String(annee), compteeEnStats: comptee });
+      await reload();
+      setOuvert(false);
+      setMessage({ ton: "ok", texte: t("periodes.msgCreee") });
+    } catch (err) {
+      setErreurForm(messageErreur(err));
+    }
   }
 
   return (
     <>
-      <div className="page-head"><h1>{t("periodes.titre")}</h1></div>
+      <div className="page-head">
+        <h1>{t("periodes.titre")}</h1>
+        <button className="btn primary" type="button" onClick={() => { setMessage(null); setErreurForm(null); setOuvert(true); }}>{t("periodes.nouvelle")}</button>
+      </div>
       {message && <div className={`banner ${message.ton}`} role="status">{message.texte}</div>}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
-        <section className="card" style={{ flex: "999 1 520px", minWidth: 0 }}>
+      <>
+        <section className="card">
           <h2 style={{ marginBottom: 8 }}>{t("periodes.historique")}</h2>
           <div className="table-wrap">
             <table className="data">
@@ -69,8 +83,9 @@ export default function PeriodesPage() {
           </div>
         </section>
 
-        <form className="card" onSubmit={creer} style={{ flex: "1 1 300px", minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
-          <h2>{t("periodes.creer")}</h2>
+        {ouvert && (
+        <Modal titre={t("periodes.creer")} onClose={() => setOuvert(false)}>
+        <form onSubmit={creer} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div className="field">
               <label htmlFor="mois">{t("periodes.mois")}</label>
@@ -90,9 +105,15 @@ export default function PeriodesPage() {
             <input id="astat" className="input" dir="ltr" value={anneeStat} placeholder={String(annee)} onChange={(e) => setAnneeStat(e.target.value)} />
           </div>
           <label className="row"><input type="checkbox" checked={comptee} onChange={(e) => setComptee(e.target.checked)} style={{ width: 20, height: 20 }} />{t("periodes.compter")}</label>
-          <button className="btn primary" type="submit">{t("periodes.creerOuvrir")}</button>
+          {erreurForm && <div className="banner bad" role="alert">{erreurForm}</div>}
+          <div className="actions">
+            <button className="btn primary" type="submit">{t("periodes.creerOuvrir")}</button>
+            <button className="btn" type="button" onClick={() => setOuvert(false)}>{t("action.annuler")}</button>
+          </div>
         </form>
-      </div>
+        </Modal>
+        )}
+      </>
     </>
   );
 }

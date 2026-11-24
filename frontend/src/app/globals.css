@@ -50,6 +50,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .sidebar {
   flex: 0 0 208px; background: var(--navy); color: #c9d6e3; padding: 24px 16px;
   display: flex; flex-direction: column; gap: 24px;
+  /* Menu fixe : il reste en place pendant le défilement de la page (sans left/right : valable aussi en RTL). */
+  position: sticky; top: 0; align-self: flex-start; height: 100vh; overflow-y: auto;
+}
+@media (max-width: 767px) {
+  .sidebar { position: static; height: auto; flex-basis: 100%; }
 }
 .brand { padding: 0 8px; display: flex; flex-direction: column; gap: 2px; }
 .brand strong { font-size: 18px; color: #fff; }
@@ -181,3 +186,19 @@ fieldset.plain { border: 0; margin: 0; padding: 0; min-width: 0; display: conten
 [dir="rtl"] .sidebar { text-align: start; }
 [dir="rtl"] select.select, [dir="rtl"] select.cell { background-position: left 8px center; }
 .ltr { direction: ltr; unicode-bidi: isolate; }
+
+/* ---------- fenêtre modale ---------- */
+dialog.modal {
+  border: 0; padding: 0; border-radius: 12px; color: var(--ink); background: var(--surface);
+  width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 48px);
+  box-shadow: 0 20px 60px rgba(16, 36, 58, 0.35); overflow: hidden;
+}
+dialog.modal[open] { display: flex; flex-direction: column; }
+dialog.modal.large { width: min(980px, calc(100vw - 32px)); }
+dialog.modal::backdrop { background: rgba(16, 36, 58, 0.55); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.modal-head h2 { font-size: 18px; }
+.modal-close { background: transparent; border: 0; font-size: 28px; line-height: 1; width: 40px; height: 40px; border-radius: 8px; cursor: pointer; color: var(--muted); }
+.modal-close:hover { background: var(--line-2); color: var(--ink); }
+.modal-body { padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+body:has(dialog.modal[open]) { overflow: hidden; }

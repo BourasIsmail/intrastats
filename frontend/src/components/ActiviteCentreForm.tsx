@@ -89,10 +89,7 @@ export function ActiviteCentreForm({ centreId, catalogue, deja, edition, onSaved
   );
 
   return (
-    <form onSubmit={soumettre} className="card" style={{ marginTop: 12 }} noValidate>
-      <h3 style={{ marginTop: 0 }}>
-        {edition ? t("act.modification", { nom: nom(edition.nom, edition.nomAr) }) : t("act.titre")}
-      </h3>
+    <form onSubmit={soumettre} style={{ display: "flex", flexDirection: "column", gap: 14 }} noValidate>
       <div className="filters-grid">
         {ligne(t("act.activite"), "fa-act",
           <select id="fa-act" className="select" value={activiteId} disabled={!!edition} onChange={(e) => setActiviteId(e.target.value)}>

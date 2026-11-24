@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, post, put } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { Modal } from "@/components/Modal";
 import { Select } from "@/components/ui";
 import type { ActiviteCatalogue, CategorieActivite } from "@/lib/types";
 
@@ -23,6 +24,7 @@ export default function CataloguePage() {
   const [message, setMessage] = useState<{ ton: "ok" | "bad"; texte: string } | null>(null);
   const [edition, setEdition] = useState<{ id: number | null; form: Formulaire } | null>(null);
   const [envoi, setEnvoi] = useState(false);
+  const [erreurForm, setErreurForm] = useState<string | null>(null);
 
   const charger = useCallback(
     () => api<ActiviteCatalogue[]>("/api/admin/activites").then(setListe)
@@ -38,7 +40,7 @@ export default function CataloguePage() {
     e.preventDefault();
     if (!edition) return;
     const f = edition.form;
-    if (!f.nom.trim() || !f.categorieId) return setMessage({ ton: "bad", texte: t("cat.erreurNom") });
+    if (!f.nom.trim() || !f.categorieId) return setErreurForm(t("cat.erreurNom"));
     const corps = {
       nom: f.nom, nomAr: f.nomAr, abreviation: f.abreviation, description: f.description,
       categorieId: Number(f.categorieId), typeActivite: f.typeActivite, personnesCibles: f.personnesCibles,
@@ -46,6 +48,7 @@ export default function CataloguePage() {
     };
     setEnvoi(true);
     setMessage(null);
+    setErreurForm(null);
     try {
       if (edition.id) await put(`/api/admin/activites/${edition.id}`, corps);
       else await post("/api/admin/activites", corps);
@@ -53,7 +56,7 @@ export default function CataloguePage() {
       setEdition(null);
       setMessage({ ton: "ok", texte: t("cat.enregistree") });
     } catch (err) {
-      setMessage({ ton: "bad", texte: messageErreur(err) });
+      setErreurForm(messageErreur(err));
     } finally {
       setEnvoi(false);
     }
@@ -74,13 +77,13 @@ export default function CataloguePage() {
           <h1>{t("cat.titre")}</h1>
           <div className="sub">{t("cat.compte", { n: fmt(liste?.length ?? 0) })}</div>
         </div>
-        {!edition && <button className="btn primary" type="button" onClick={() => { setMessage(null); setEdition({ id: null, form: vide() }); }}>{t("cat.ajouter")}</button>}
+        <button className="btn primary" type="button" onClick={() => { setMessage(null); setErreurForm(null); setEdition({ id: null, form: vide() }); }}>{t("cat.ajouter")}</button>
       </div>
       {message && <div className={`banner ${message.ton}`} role={message.ton === "bad" ? "alert" : "status"}>{message.texte}</div>}
 
       {edition && (
-        <form className="card" onSubmit={enregistrer} noValidate>
-          <h2>{edition.id ? t("cat.titreModif") : t("cat.titreNouveau")}</h2>
+        <Modal titre={edition.id ? t("cat.titreModif") : t("cat.titreNouveau")} large onClose={() => setEdition(null)}>
+        <form onSubmit={enregistrer} noValidate style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div className="filters-grid">
             {champ("c-nom", t("cat.nom"), edition.form.nom, "nom", { maxLength: 250 })}
             {champ("c-ar", t("cat.nomAr"), edition.form.nomAr, "nomAr", { maxLength: 250, dir: "rtl", lang: "ar" })}
@@ -99,11 +102,13 @@ export default function CataloguePage() {
             <input type="checkbox" checked={edition.form.actif} onChange={(e) => maj({ actif: e.target.checked })} />
             {t("cat.proposee")}
           </label>
-          <div className="actions" style={{ marginTop: 12 }}>
+          {erreurForm && <div className="banner bad" role="alert">{erreurForm}</div>}
+          <div className="actions">
             <button className="btn primary" type="submit" disabled={envoi}>{t("action.enregistrer")}</button>
             <button className="btn" type="button" onClick={() => setEdition(null)}>{t("action.annuler")}</button>
           </div>
         </form>
+        </Modal>
       )}
 
       <section className="card">
@@ -127,11 +132,11 @@ export default function CataloguePage() {
                   <td style={{ textAlign: "end" }}>
                     <button className="btn link" type="button" onClick={() => {
                       setMessage(null);
+                      setErreurForm(null);
                       setEdition({ id: a.id, form: {
                         nom: a.nom, nomAr: a.nomAr ?? "", abreviation: a.abreviation ?? "", description: a.description ?? "",
                         categorieId: String(a.categorieId), typeActivite: a.typeActivite, personnesCibles: a.personnesCibles ?? "",
                         priorite: a.priorite != null ? String(a.priorite) : "", actif: a.actif } });
-                      window.scrollTo({ top: 0 });
                     }}>{t("action.modifier")}</button>
                   </td>
                 </tr>

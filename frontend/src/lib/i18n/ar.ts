@@ -287,6 +287,9 @@ export const ar: Record<CleTraduction, string> = {
   "regle.aucunBeneficiaire": "مركز نشط بدون أي مستفيد.",
   "regle.champ": "{libelle}: {message}.",
 
+  "action.fermer": "إغلاق",
+  "users.nouveauBouton": "مستخدم جديد",
+  "periodes.nouvelle": "فترة جديدة",
   // --- activités de centre, personnel, catalogue
   "nav.personnel": "الموظفون",
   "nav.catalogue": "لائحة الأنشطة",

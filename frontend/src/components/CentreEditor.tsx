@@ -7,6 +7,7 @@ import { api, post, put } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useTerritoire } from "@/lib/hooks";
 import { ActiviteCentreForm } from "@/components/ActiviteCentreForm";
+import { Modal } from "@/components/Modal";
 import { useI18n } from "@/lib/i18n";
 import type { CatalogueItem, CentreDetail, Commune } from "@/lib/types";
 
@@ -185,6 +186,7 @@ export function CentreEditor({ id }: { id?: number }) {
   // ---- activités du centre
   const [formActivite, setFormActivite] = useState<"ajout" | number | null>(null);
   const [cesser, setCesser] = useState<{ id: number; date: string; motif: string } | null>(null);
+  const [erreurCess, setErreurCess] = useState<string | null>(null);
 
   function activiteEnregistree(c: CentreDetail) {
     setCentre(c);
@@ -194,7 +196,7 @@ export function CentreEditor({ id }: { id?: number }) {
 
   async function cesserActivite() {
     if (!cesser) return;
-    setMessage(null);
+    setErreurCess(null);
     try {
       const c = await post<CentreDetail>(`/api/centres/${id}/activites/${cesser.id}/cesser`, {
         date: cesser.date || null, motif: cesser.motif || null,
@@ -202,7 +204,7 @@ export function CentreEditor({ id }: { id?: number }) {
       setCentre(c);
       setCesser(null);
     } catch (err) {
-      setMessage({ ton: "bad", texte: messageErreur(err) });
+      setErreurCess(messageErreur(err));
     }
   }
 
@@ -366,23 +368,32 @@ export function CentreEditor({ id }: { id?: number }) {
             </table>
           </div>
           {peutModifier && formActivite === "ajout" && (
-            <ActiviteCentreForm centreId={id!} catalogue={catalogue} deja={deja} onSaved={activiteEnregistree}
-                                onCancel={() => setFormActivite(null)} />
+            <Modal titre={t("act.titre")} large onClose={() => setFormActivite(null)}>
+              <ActiviteCentreForm centreId={id!} catalogue={catalogue} deja={deja} onSaved={activiteEnregistree}
+                                  onCancel={() => setFormActivite(null)} />
+            </Modal>
           )}
-          {peutModifier && typeof formActivite === "number" && centre?.activites.find((a) => a.id === formActivite) && (
-            <ActiviteCentreForm key={formActivite} centreId={id!} catalogue={catalogue} deja={deja}
-                                edition={centre.activites.find((a) => a.id === formActivite)}
-                                onSaved={activiteEnregistree} onCancel={() => setFormActivite(null)} />
-          )}
+          {peutModifier && typeof formActivite === "number" && centre?.activites.find((a) => a.id === formActivite) && (() => {
+            const edition = centre.activites.find((a) => a.id === formActivite)!;
+            return (
+              <Modal titre={t("act.modification", { nom: nom(edition.nom, edition.nomAr) })} large onClose={() => setFormActivite(null)}>
+                <ActiviteCentreForm key={formActivite} centreId={id!} catalogue={catalogue} deja={deja} edition={edition}
+                                    onSaved={activiteEnregistree} onCancel={() => setFormActivite(null)} />
+              </Modal>
+            );
+          })()}
           {cesser && (
-            <div className="filters" style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" }}>
+            <Modal titre={t("centre.cesser")} onClose={() => { setCesser(null); setErreurCess(null); }}>
               <div className="field"><label htmlFor="dcess">{t("centre.dateCessation")}</label>
                 <input id="dcess" className="input" type="date" value={cesser.date} onChange={(e) => setCesser({ ...cesser, date: e.target.value })} /></div>
-              <div className="field" style={{ minWidth: 260 }}><label htmlFor="mcess">{t("centre.motif")}</label>
+              <div className="field"><label htmlFor="mcess">{t("centre.motif")}</label>
                 <input id="mcess" className="input" value={cesser.motif} onChange={(e) => setCesser({ ...cesser, motif: e.target.value })} /></div>
-              <button className="btn danger" type="button" onClick={cesserActivite}>{t("centre.confirmerCessation")}</button>
-              <button className="btn" type="button" onClick={() => setCesser(null)}>{t("action.annuler")}</button>
-            </div>
+              {erreurCess && <div className="banner bad" role="alert">{erreurCess}</div>}
+              <div className="actions">
+                <button className="btn danger" type="button" onClick={cesserActivite}>{t("centre.confirmerCessation")}</button>
+                <button className="btn" type="button" onClick={() => { setCesser(null); setErreurCess(null); }}>{t("action.annuler")}</button>
+              </div>
+            </Modal>
           )}
         </section>
       )}

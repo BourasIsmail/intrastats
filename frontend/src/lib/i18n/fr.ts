@@ -285,6 +285,9 @@ export const fr = {
   "regle.aucunBeneficiaire": "Centre actif sans aucun bénéficiaire.",
   "regle.champ": "{libelle} : {message}.",
 
+  "action.fermer": "Fermer",
+  "users.nouveauBouton": "Nouvel utilisateur",
+  "periodes.nouvelle": "Nouvelle période",
   // --- activités de centre, personnel, catalogue
   "nav.personnel": "Personnel",
   "nav.catalogue": "Catalogue des activités",

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, post } from "@/lib/api";
+import { Modal } from "@/components/Modal";
 import { useTerritoire } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import type { Role, UtilisateurDto } from "@/lib/types";
@@ -23,6 +24,8 @@ export default function UtilisateursPage() {
   const [role, setRole] = useState<Role>("PROVINCIAL");
   const [provinceId, setProvinceId] = useState("");
   const [regionId, setRegionId] = useState("");
+  const [ouvert, setOuvert] = useState(false);
+  const [erreurForm, setErreurForm] = useState<string | null>(null);
 
   const charger = useCallback(() => {
     api<UtilisateurDto[]>("/api/utilisateurs").then(setListe).catch((e) => setMessage({ ton: "bad", texte: messageErreur(e) }));
@@ -32,6 +35,7 @@ export default function UtilisateursPage() {
   async function creer(e: FormEvent) {
     e.preventDefault();
     setMessage(null);
+    setErreurForm(null);
     try {
       const r = await post<Created>("/api/utilisateurs", {
         nom, login, matricule: matricule || null, email: email || null, role,
@@ -40,9 +44,10 @@ export default function UtilisateursPage() {
       });
       setMessage({ ton: "ok", texte: t("users.msgCree", { mdp: r.motDePasseTemporaire }) });
       setNom(""); setLogin(""); setMatricule(""); setEmail("");
+      setOuvert(false);
       charger();
     } catch (err) {
-      setMessage({ ton: "bad", texte: messageErreur(err) });
+      setErreurForm(messageErreur(err));
     }
   }
 
@@ -71,11 +76,12 @@ export default function UtilisateursPage() {
     <>
       <div className="page-head">
         <div><h1>{t("users.titre")}</h1><div className="sub">{t("users.compte", { n: fmt(liste.length) })}</div></div>
+        <button className="btn primary" type="button" onClick={() => { setMessage(null); setErreurForm(null); setOuvert(true); }}>{t("users.nouveauBouton")}</button>
       </div>
       {message && <div className={`banner ${message.ton}`} role="status">{message.texte}</div>}
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
-        <section className="card" style={{ flex: "999 1 520px", minWidth: 0 }}>
+      <>
+        <section className="card">
           <div className="table-wrap">
             <table className="data">
               <thead>
@@ -107,8 +113,9 @@ export default function UtilisateursPage() {
           </div>
         </section>
 
-        <form className="card" onSubmit={creer} style={{ flex: "1 1 300px", minWidth: 0, display: "flex", flexDirection: "column", gap: 14 }}>
-          <h2>{t("users.nouveau")}</h2>
+        {ouvert && (
+        <Modal titre={t("users.nouveau")} onClose={() => setOuvert(false)}>
+        <form onSubmit={creer} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div className="field"><label htmlFor="nom">{t("users.nom")}</label><input id="nom" className="input" value={nom} onChange={(e) => setNom(e.target.value)} required /></div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div className="field"><label htmlFor="login">{t("users.login")}</label><input id="login" className="input" dir="ltr" value={login} onChange={(e) => setLogin(e.target.value)} required pattern="[A-Za-z0-9._-]{3,60}" /></div>
@@ -141,9 +148,15 @@ export default function UtilisateursPage() {
               </select>
             </div>
           )}
-          <button className="btn primary" type="submit">{t("users.creer")}</button>
+          {erreurForm && <div className="banner bad" role="alert">{erreurForm}</div>}
+          <div className="actions">
+            <button className="btn primary" type="submit">{t("users.creer")}</button>
+            <button className="btn" type="button" onClick={() => setOuvert(false)}>{t("action.annuler")}</button>
+          </div>
         </form>
-      </div>
+        </Modal>
+        )}
+      </>
     </>
   );
 }
