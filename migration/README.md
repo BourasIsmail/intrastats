@@ -1,7 +1,7 @@
 # Migration de l'ancienne base
 
-Scripts SQL qui reprennent l'ancienne base (`locaux`, `centres`, `regions`, `provinces`, `communes`, `activites`,
-`activite_centre`, `periodicites`, `statistiques`, `users`) dans le nouveau schéma. Rien n'est modifié dans l'ancienne base.
+Scripts SQL qui reprennent l'ancienne base (`locaux`, `centres`, `regions_nv`, `provinces`, `structures`, `communes`, `activites`,
+`activite_centre`, `personnel`, `users`, et en option `periodicites` et `statistiques`) dans le nouveau schéma. Rien n'est modifié dans l'ancienne base.
 
 ## Procédure
 
@@ -13,9 +13,11 @@ Scripts SQL qui reprennent l'ancienne base (`locaux`, `centres`, `regions`, `pro
    ./migrate.sh entraide_intranet_db entraide --reset -- -uroot -p
    ```
    `--reset` vide d'abord le nouveau schéma. Sans lui, le script refuse de tourner si le nouveau schéma contient déjà des données.
+   Les périodes et statistiques ne sont **pas** migrées par défaut (l'application démarre sans historique) ; ajouter `--avec-statistiques` pour les reprendre (`01b_statistiques.sql`).
+   Après l'import, `01c_decoupage_regional.sql` rattache chaque province à sa région (voir ci-dessous).
 4. **Lire les contrôles** affichés à la fin :
    - comptages ancien / nouveau / écartés, tous à `OK` ;
-   - totaux de bénéficiaires par période, identiques, à `OK` ;
+   - avec `--avec-statistiques` : totaux de bénéficiaires par période, identiques, à `OK` ;
    - anomalies par catégorie (table `migration_rapport`) ;
    - comptes sans périmètre : la liste doit être vide.
 5. **Traiter le rapport** : `SELECT * FROM migration_rapport WHERE categorie = '…'` donne le détail de chaque anomalie.
@@ -26,21 +28,31 @@ Scripts SQL qui reprennent l'ancienne base (`locaux`, `centres`, `regions`, `pro
 
 | Ancienne table | Reprise |
 |---|---|
-| `regions`, `provinces`, `communes` | Identifiants conservés. Doublons d'identifiant écartés, provinces sans région et communes sans province listées. Coordonnées à 0 ou hors bornes remplacées par `NULL`. Code ArcGIS en double non repris. |
+| `regions_nv`, `provinces`, `communes` | Régions = table `regions_nv` (12 régions). `provinces.id_region` est vide dans l'ancienne base : la région est déduite de la structure (délégation → coordination régionale), puis corrigée par `01c_decoupage_regional.sql`. Identifiants conservés. Doublons d'identifiant écartés, communes sans province ou sans nom listées. Coordonnées à 0 ou hors bornes remplacées par `NULL`. Code ArcGIS en double non repris. |
 | `locaux` + `centres` | Seuls les locaux qui ont une ligne dans `centres` sont repris (les autres sont listés). Codes vides ou en double corrigés (`C-<id>`, `<code>-<id>`). Dates `0000-00-00` deviennent `NULL`. Coordonnées : `latitude/longitude`, sinon `latitu/longit`. Foncier et équipements dans leurs tables. |
 | `activites` | Hiérarchie reconstruite à partir des textes (`programme`, `axe`, `categorie2`) ; valeurs vides = « Non classé ». |
 | `activite_centre` | Une ligne par (centre, activité), la plus récente. **L'état (Ouvert / Fermé) fait foi** : fermé sans date valide → date de saisie ; ouvert → pas de date de cessation ; `2222-12-31` devient `NULL`. Reprend responsable (`id_responsable` → `personnel`), superficie, gestion (Entraide Nationale, Association, Cogestion ; autre valeur → « Autre » avec le texte d'origine), association et date de convention. `salle1..6` deviennent des lignes `salle`. |
 | `personnel` | Identifiants conservés. Province = celle du centre (`id_local`), sinon celle dont la structure est la délégation (`id_structure`) ; sans province ou sans nom : non migré et listé. Dates invalides → `NULL`, enfants bornés à 30. Non repris : `som`, `verif`, `verif1`, `prov`, `id_str2`, `id_activite`. |
-| `periodicites` | Périodes invalides écartées, doublons (année, mois) fusionnés. **Une seule période reste ouverte** (la plus récente). |
-| `statistiques` | Rattachées par (centre, activité, période). Lignes `test = 1` écartées. Valeurs hors bornes reprises mais listées. Etat du centre converti. |
+| `periodicites` (option) | Périodes invalides écartées, doublons (année, mois) fusionnés. **Une seule période reste ouverte** (la plus récente). |
+| `statistiques` (option) | Rattachées par (centre, activité, période). Lignes `test = 1` écartées. Valeurs hors bornes reprises mais listées. Etat du centre converti. |
 | (déduit) | `saisie_province` : `VALIDE` pour les périodes clôturées (historique), `BROUILLON` pour la période ouverte. |
 | `users` | Rôle et périmètre déduits de la structure de rattachement (voir ci-dessous). Mot de passe repris au format `{mysql}` : remplacé par bcrypt à la première connexion. |
+
+### Régions des provinces
+
+La déduction par la structure suit l'**ancien** découpage régional : elle est fausse pour 20 provinces de l'export examiné
+(Settat, Khénifra, Tata, Errachidia, Dakhla, Ouarzazate, Zagora, Al Hoceima, Taza, Taounate, Midelt, Tinghir, Safi,
+Youssoufia, Ouazzane, Sidi Ifni, Benslimane, Berrechid, Essmara, Oued Eddahab, Aousserd...). `01c_decoupage_regional.sql`
+contient la liste complète (province, délégation, région) selon le découpage de 2015 en 12 régions. Chaque correction est
+appliquée seulement si l'identifiant de la province et sa délégation correspondent, puis listée dans `migration_rapport`
+(`province_region_corrigee`). **Cette liste est à faire vérifier par l'institution** ; pour la changer, modifier les lignes de `tmp_decoupage`.
+Les noms arabes des provinces n'existent pas dans l'ancienne base : à saisir après migration.
 
 ### Utilisateurs : règles de déduction
 
 - `type` contenant « admin » → **ADMIN** ;
 - sinon `id_structure` = `provinces.id_delegation` d'une province → **PROVINCIAL** de cette province ;
-- sinon `id_structure` = `regions.id_coordination` d'une région → **REGIONAL** de cette région ;
+- sinon `id_structure` = `regions_nv.id_coordination` d'une région → **REGIONAL** de cette région ;
 - sinon : compte **non migré**, listé dans le rapport (à créer à la main dans l'application).
 
 Les comptes qui partagent le même mot de passe (par exemple un mot de passe par défaut) sont marqués « mot de passe
@@ -59,8 +71,10 @@ Ces points sont des hypothèses faites faute d'avoir vu les données :
 
 ### Constats sur un extrait réel (tables `locaux`, `centres`, `activites`, `activite_centre`, `personnel`)
 
-Essai fait avec un territoire synthétique (les tables `regions`, `provinces`, `communes`, `structures`, `users`, `periodicites`, `statistiques` n'avaient pas été fournies). Durée : environ 1,5 s. À refaire avec la base complète.
+Essai fait avec les vrais exports de `regions_nv`, `provinces`, `structures`, `communes`, `locaux`, `centres`, `activites`, `activite_centre` et `personnel` (les tables `users`, `periodicites` et `statistiques` n'avaient pas été fournies). Durée : environ 1,5 s.
 
+- 12 régions, 82 provinces et 2 028 communes migrées (26 communes sans nom et 5 sans province écartées).
+- 266 agents sans province (structures centrales, sans centre) ou sans nom ne sont pas migrés.
 - `centres` contient 437 lignes sans `locaux` correspondant (ni nom, ni province) : non migrées, listées (`centre_sans_local`).
 - 143 locaux ont `id_province = 0` : non migrés (`centre_sans_province`) ; avec les précédents, 243 liaisons centre-activité sont écartées (`activite_centre_orpheline`).
 - `locaux.code` n'est pas un code unique : 3 243 valeurs vides, beaucoup de doublons, des valeurs comme `100000` ou `0`. Presque tous les centres reçoivent donc un code généré (`C-<id>`). Il faut décider de quoi faire de ce champ.

@@ -16,9 +16,6 @@ SET SESSION sql_mode = 'NO_ENGINE_SUBSTITUTION';
 SET NAMES utf8mb4;
 USE __NEW__;
 
--- Hypothèse à confirmer : periodicites.etat = 1 signifie « période ouverte » (0 = clôturée).
-SET @etat_periode_ouverte = 1;
-
 CREATE TABLE IF NOT EXISTS __NEW__.migration_rapport (
     id        INT AUTO_INCREMENT PRIMARY KEY,
     categorie VARCHAR(60)  NOT NULL,
@@ -30,32 +27,47 @@ TRUNCATE TABLE __NEW__.migration_rapport;
 -- --------------------------------------------------------------------------------------------
 -- 1. Territoire
 -- --------------------------------------------------------------------------------------------
+-- Régions : table regions_nv (le nouveau découpage en 12 régions).
 INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
 SELECT 'region_doublon', id, CONCAT(COUNT(*), ' lignes avec le même identifiant : la première est conservée')
-FROM __OLD__.regions WHERE id > 0 GROUP BY id HAVING COUNT(*) > 1;
+FROM __OLD__.regions_nv WHERE id > 0 GROUP BY id HAVING COUNT(*) > 1;
 
 -- Parmi des lignes au même identifiant, on garde celle qui a le nom arabe (puis le nom le plus court).
 INSERT INTO __NEW__.region (id, nom_fr, nom_ar)
 SELECT r.id, TRIM(r.region), NULLIF(TRIM(r.region_ar), '')
 FROM (SELECT g.*, ROW_NUMBER() OVER (PARTITION BY g.id ORDER BY CHAR_LENGTH(g.region_ar) DESC, CHAR_LENGTH(g.region)) AS rn
-      FROM __OLD__.regions g WHERE g.id > 0) r
+      FROM __OLD__.regions_nv g WHERE g.id > 0) r
 WHERE r.rn = 1 AND TRIM(r.region) <> '';
 
-INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
-SELECT 'province_sans_region', p.id, CONCAT('province « ', p.province, ' » : région ', IFNULL(p.id_region, 'NULL'), ' inconnue, non migrée')
+-- Région d'une province : provinces.id_region n'est pas renseigné dans l'ancienne base. On la déduit de la structure :
+-- délégation (provinces.id_delegation) -> coordination régionale (structures.id_parent) -> regions_nv.id_coordination.
+-- Cette déduction suit l'ancien découpage ; 01c_decoupage_regional.sql la corrige ensuite.
+CREATE TEMPORARY TABLE tmp_province_region AS
+SELECT p.id AS province_id,
+       (SELECT MIN(rv.id) FROM __OLD__.regions_nv rv
+        WHERE rv.id_coordination = d.id_parent AND EXISTS (SELECT 1 FROM __NEW__.region nr WHERE nr.id = rv.id)) AS region_id
 FROM __OLD__.provinces p
-WHERE NOT EXISTS (SELECT 1 FROM __NEW__.region r WHERE r.id = p.id_region);
+LEFT JOIN __OLD__.structures d ON d.id = p.id_delegation;
+
+INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
+SELECT 'province_sans_region', p.id, CONCAT('province « ', p.province, ' » : région introuvable via la structure ', IFNULL(p.id_delegation, 'NULL'), ', non migrée')
+FROM __OLD__.provinces p JOIN tmp_province_region t ON t.province_id = p.id
+WHERE t.region_id IS NULL;
 
 INSERT INTO __NEW__.province (id, nom_fr, region_id)
-SELECT p.id, TRIM(p.province), p.id_region
-FROM __OLD__.provinces p
-WHERE p.province IS NOT NULL AND TRIM(p.province) <> ''
-  AND EXISTS (SELECT 1 FROM __NEW__.region r WHERE r.id = p.id_region);
+SELECT p.id, TRIM(p.province), t.region_id
+FROM __OLD__.provinces p JOIN tmp_province_region t ON t.province_id = p.id
+WHERE p.province IS NOT NULL AND TRIM(p.province) <> '' AND t.region_id IS NOT NULL;
 
 INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
 SELECT 'commune_sans_province', c.id, CONCAT('commune « ', c.commune, ' » : province ', IFNULL(c.id_province, 'NULL'), ' absente, non migrée')
 FROM __OLD__.communes c
 WHERE NOT EXISTS (SELECT 1 FROM __NEW__.province p WHERE p.id = c.id_province);
+
+INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
+SELECT 'commune_sans_nom', c.id, CONCAT('commune de la province ', c.id_province, ' sans nom : non migrée')
+FROM __OLD__.communes c
+WHERE (c.commune IS NULL OR TRIM(c.commune) = '') AND EXISTS (SELECT 1 FROM __NEW__.province p WHERE p.id = c.id_province);
 
 INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
 SELECT 'commune_code_arcgis_double', c.id, CONCAT('code ArcGIS ', c.code_arcgis, ' déjà utilisé : code non repris')
@@ -292,83 +304,10 @@ JOIN (SELECT Id, 1 AS numero, salle1 AS superficie FROM __OLD__.activite_centre
 WHERE s.superficie > 0;
 
 -- --------------------------------------------------------------------------------------------
--- 5. Périodes et statistiques
--- --------------------------------------------------------------------------------------------
-INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
-SELECT 'periode_invalide', id, CONCAT('mois ', mois, ' / année ', annee, ' : période invalide, écartée')
-FROM __OLD__.periodicites WHERE mois NOT BETWEEN 1 AND 12 OR annee < 1990;
-
-INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
-SELECT 'periode_doublon', MIN(id), CONCAT(mois, '/', annee, ' : ', COUNT(*), ' périodes, les statistiques sont rattachées à la première')
-FROM __OLD__.periodicites WHERE mois BETWEEN 1 AND 12 AND annee >= 1990 GROUP BY annee, mois HAVING COUNT(*) > 1;
-
-INSERT INTO __NEW__.periode (id, mois, annee, annee_stat, statut, comptee_en_stats)
-SELECT MIN(p.id), p.mois, p.annee, LEFT(COALESCE(NULLIF(MAX(p.annee_stat), ''), CAST(p.annee AS CHAR)), 4),
-       CASE WHEN MAX(p.etat) = @etat_periode_ouverte THEN 'OUVERTE' ELSE 'CLOTUREE' END,
-       MAX(p.pour_stat) <> 0
-FROM __OLD__.periodicites p
-WHERE p.mois BETWEEN 1 AND 12 AND p.annee >= 1990
-GROUP BY p.annee, p.mois;
-
--- Une seule période peut être ouverte : si plusieurs le sont, seule la plus récente le reste.
-UPDATE __NEW__.periode SET statut = 'CLOTUREE'
-WHERE statut = 'OUVERTE'
-  AND id <> (SELECT m.id FROM (SELECT id FROM __NEW__.periode WHERE statut = 'OUVERTE' ORDER BY annee DESC, mois DESC LIMIT 1) m);
-
-INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
-SELECT 'statistique_test', COUNT(*), 'lignes marquées test=1 : non migrées' FROM __OLD__.statistiques WHERE test <> 0 HAVING COUNT(*) > 0;
-
-INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
-SELECT 'statistique_orpheline', CONCAT(s.id_centre, '/', s.id_activite, '/', s.id_periodicite),
-       'centre/activité ou période introuvable dans le nouveau schéma : ligne écartée'
-FROM __OLD__.statistiques s
-LEFT JOIN __OLD__.periodicites p ON p.id = s.id_periodicite
-LEFT JOIN __NEW__.periode np ON np.annee = p.annee AND np.mois = p.mois
-LEFT JOIN __NEW__.centre_activite ca ON ca.centre_id = s.id_centre AND ca.activite_id = s.id_activite
-WHERE s.test = 0 AND (np.id IS NULL OR ca.id IS NULL);
-
-INSERT INTO __NEW__.statistique (centre_activite_id, periode_id, masculins, feminins, alphabetisation, agents_titulaires,
-                                 agents_vacataires, agents_volontaires, agents_associations, agents_autre_dep,
-                                 etat_centre, motif, updated_at)
-SELECT x.ca_id, x.periode_id, x.nb_beneficiaires_m, x.nb_beneficiaires_f, x.nb_beneficiaires_alph, x.nb_pers_entraide_tit,
-       x.nb_pers_entraide_vac, x.nb_pers_entraide_vol, x.nb_pers_part, x.nb_pers_prom,
-       CASE WHEN LOWER(x.etat_centre) LIKE 'actif%' OR TRIM(x.etat_centre) = '' THEN 'ACTIF'
-            WHEN LOWER(x.etat_centre) LIKE '%définitiv%' OR LOWER(x.etat_centre) LIKE '%definitiv%' THEN 'FERME_DEFINITIVEMENT'
-            ELSE 'FERME_TEMPORAIREMENT' END,
-       LEFT(NULLIF(TRIM(x.motif), ''), 500),
-       CASE WHEN x.date_saisie >= '1990-01-01' THEN x.date_saisie ELSE NOW() END
-FROM (
-    SELECT s.*, ca.id AS ca_id, np.id AS periode_id,
-           ROW_NUMBER() OVER (PARTITION BY ca.id, np.id ORDER BY s.date_saisie DESC, s.id_periodicite DESC) AS rn
-    FROM __OLD__.statistiques s
-    JOIN __OLD__.periodicites p ON p.id = s.id_periodicite
-    JOIN __NEW__.periode np ON np.annee = p.annee AND np.mois = p.mois
-    JOIN __NEW__.centre_activite ca ON ca.centre_id = s.id_centre AND ca.activite_id = s.id_activite
-    WHERE s.test = 0
-) x
-WHERE x.rn = 1;
-
-INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
-SELECT 'statistique_hors_bornes', st.id, 'valeur négative ou supérieure à 99 999 : reprise telle quelle, à vérifier'
-FROM __NEW__.statistique st
-WHERE LEAST(IFNULL(masculins,0), IFNULL(feminins,0), IFNULL(alphabetisation,0), IFNULL(agents_titulaires,0), IFNULL(agents_vacataires,0),
-            IFNULL(agents_volontaires,0), IFNULL(agents_associations,0), IFNULL(agents_autre_dep,0)) < 0
-   OR GREATEST(IFNULL(masculins,0), IFNULL(feminins,0), IFNULL(alphabetisation,0), IFNULL(agents_titulaires,0), IFNULL(agents_vacataires,0),
-            IFNULL(agents_volontaires,0), IFNULL(agents_associations,0), IFNULL(agents_autre_dep,0)) > 99999;
-
--- Etat de la saisie par province : les périodes clôturées sont historiques donc VALIDE ; la période ouverte reste en BROUILLON.
-INSERT INTO __NEW__.saisie_province (province_id, periode_id, statut)
-SELECT DISTINCT ce.province_id, st.periode_id, CASE WHEN p.statut = 'CLOTUREE' THEN 'VALIDE' ELSE 'BROUILLON' END
-FROM __NEW__.statistique st
-JOIN __NEW__.centre_activite ca ON ca.id = st.centre_activite_id
-JOIN __NEW__.centre ce ON ce.id = ca.centre_id
-JOIN __NEW__.periode p ON p.id = st.periode_id;
-
--- --------------------------------------------------------------------------------------------
 -- 6. Utilisateurs
 --    Rôle et périmètre sont déduits de la structure de rattachement :
 --      * structure = délégation d'une province (provinces.id_delegation)  -> PROVINCIAL de cette province ;
---      * structure = coordination d'une région (regions.id_coordination)  -> REGIONAL de cette région ;
+--      * structure = coordination d'une région (regions_nv.id_coordination)  -> REGIONAL de cette région ;
 --      * type contenant « admin »                                          -> ADMIN.
 --    Les mots de passe restent au format MySQL PASSWORD() : préfixe {mysql}, remplacés par bcrypt à la première connexion.
 -- --------------------------------------------------------------------------------------------
@@ -387,7 +326,7 @@ FROM __OLD__.users u
 LEFT JOIN (SELECT MIN(p.id) AS id, p.id_delegation FROM __OLD__.provinces p
            WHERE EXISTS (SELECT 1 FROM __NEW__.province np WHERE np.id = p.id) GROUP BY p.id_delegation) pv
        ON pv.id_delegation = u.id_structure
-LEFT JOIN (SELECT MIN(r.id) AS id, r.id_coordination FROM __OLD__.regions r WHERE r.id > 0 GROUP BY r.id_coordination) rg
+LEFT JOIN (SELECT MIN(r.id) AS id, r.id_coordination FROM __OLD__.regions_nv r WHERE r.id > 0 GROUP BY r.id_coordination) rg
        ON rg.id_coordination = u.id_structure AND EXISTS (SELECT 1 FROM __NEW__.region nr WHERE nr.id = rg.id);
 
 INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
@@ -427,4 +366,5 @@ WHERE t.login <> '' AND t.rn_login = 1 AND t.role IS NOT NULL AND t.password REG
   AND t.login NOT REGEXP '^[A-Za-z0-9._-]{3,60}$';
 
 DROP TEMPORARY TABLE tmp_users;
+DROP TEMPORARY TABLE tmp_province_region;
 DROP TEMPORARY TABLE tmp_activite_centre;

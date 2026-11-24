@@ -20,7 +20,7 @@ echo "→ Nouveau schéma vide ($NEW), migrations Flyway V1 à V6"
 for f in "$ROOT"/backend/src/main/resources/db/migration/V*.sql; do "${MYSQL[@]}" "$NEW" < "$f"; done
 
 echo "→ Migration"
-"$DIR/../migrate.sh" "$OLD" "$NEW" -- "$@" > /tmp/migration-test.log 2>&1 || { cat /tmp/migration-test.log; exit 1; }
+"$DIR/../migrate.sh" "$OLD" "$NEW" --avec-statistiques -- "$@" > /tmp/migration-test.log 2>&1 || { cat /tmp/migration-test.log; exit 1; }
 
 echo "→ Vérifications"
 fail=0
@@ -77,6 +77,14 @@ check "mot de passe repris au format {mysql}"             "{mysql}*C73FDAE2818CD
 check "mot de passe partagé : changement forcé"           "1" "SELECT mot_de_passe_temporaire FROM $NEW.utilisateur WHERE login = 'prov.sale'"
 check "compte désactivé reste désactivé"                  "0" "SELECT actif FROM $NEW.utilisateur WHERE login = 'ancien'"
 check "comptes non migrables listés dans le rapport"      "3" "SELECT COUNT(*) FROM $NEW.migration_rapport WHERE categorie = 'utilisateur_non_migre'"
+
+
+echo "→ Migration sans statistiques (comportement par défaut)"
+"$DIR/../migrate.sh" "$OLD" "$NEW" --reset -- "$@" > /tmp/migration-test2.log 2>&1 || { cat /tmp/migration-test2.log; exit 1; }
+check "sans --avec-statistiques : aucune période"          "0" "SELECT COUNT(*) FROM $NEW.periode"
+check "sans --avec-statistiques : aucune statistique"      "0" "SELECT COUNT(*) FROM $NEW.statistique"
+check "sans --avec-statistiques : centres toujours migrés" "4" "SELECT COUNT(*) FROM $NEW.centre"
+check "région déduite de la structure (Fès)"               "2" "SELECT region_id FROM $NEW.province WHERE id = 4"
 
 "${MYSQL[@]}" -e "DROP DATABASE $OLD; DROP DATABASE $NEW;"
 if [[ $fail -eq 0 ]]; then echo "→ Tous les contrôles passent."; else echo "→ Des contrôles échouent."; exit 1; fi

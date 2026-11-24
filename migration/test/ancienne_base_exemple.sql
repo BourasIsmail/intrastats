@@ -9,10 +9,9 @@ DROP DATABASE IF EXISTS __OLD__;
 CREATE DATABASE __OLD__ CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE __OLD__;
 
-CREATE TABLE regions (
-  id int NOT NULL DEFAULT 0, region varchar(40) NOT NULL DEFAULT '', region_ar varchar(120) NOT NULL,
-  id_coordination int NOT NULL DEFAULT 0, id_delegation_chef int NOT NULL,
-  ind_pauvr decimal(5,2) NOT NULL, ind_vuln decimal(5,2) NOT NULL, ind_vol_pauvr decimal(5,2) NOT NULL, ind_sev_pauvr decimal(5,2) NOT NULL);
+CREATE TABLE regions_nv (
+  id int NOT NULL DEFAULT 0, region varchar(255), region_ar varchar(255),
+  id_coordination int NOT NULL DEFAULT 0, id_delegation_chef int NOT NULL DEFAULT 0);
 CREATE TABLE provinces (
   id int NOT NULL AUTO_INCREMENT PRIMARY KEY, province varchar(30), id_delegation int, id_region int,
   ind_pauvr decimal(5,2) NOT NULL, ind_vuln decimal(5,2) NOT NULL, ind_vol_pauvr decimal(5,2) NOT NULL, ind_sev_pauvr decimal(5,2) NOT NULL);
@@ -84,7 +83,7 @@ CREATE TABLE users (
   is_password_temporary tinyint(1) NOT NULL DEFAULT 1, last_connexion_at datetime);
 
 -- ---------------------------------------------------------------- territoire
-INSERT INTO regions (id, region, region_ar, id_coordination) VALUES
+INSERT INTO regions_nv (id, region, region_ar, id_coordination) VALUES
   (1, 'Rabat-Salé-Kénitra', 'الرباط سلا القنيطرة', 900),
   (1, 'Rabat-Salé-Kénitra (doublon)', '', 900),          -- doublon d'identifiant : une seule région doit rester
   (2, 'Fès-Meknès', 'فاس مكناس', 901);
@@ -166,8 +165,9 @@ INSERT INTO statistiques (id_activite, id_centre, id_periodicite, nb_beneficiair
   (1, 2, 5, 1, 1, 0, 0, 0, 0, 0, 0, '2026-11-02 09:00:00', 'Actif', '', 0);               -- période invalide (mois 13)
 
 -- ---------------------------------------------------------------- utilisateurs
-INSERT INTO structures (id, type, nom) VALUES (900, 'coordination', 'Coordination RSK'), (100, 'delegation', 'Délégation Rabat'),
-  (101, 'delegation', 'Délégation Salé'), (102, 'delegation', 'Délégation Kénitra');
+INSERT INTO structures (id, type, nom, id_parent) VALUES (900, 'coordination', 'Coordination RSK', 1), (901, 'coordination', 'Coordination Fès', 1),
+  (100, 'delegation', 'Délégation Rabat', 900), (101, 'delegation', 'Délégation Salé', 900), (102, 'delegation', 'Délégation Kénitra', 900),
+  (103, 'delegation', 'Délégation Fès', 901);
 INSERT INTO users (id, matricule, nom, login, password, type, state, id_structure, e_mail, last_connexion_at) VALUES
   (1, '10482', 'Administrateur', 'admin', '*C73FDAE2818CD9BD13FED162B2DE48B9088047BE', 'Administrateur', '1', 0, 'admin@exemple.ma', '2026-11-20 08:00:00'),
   (2, '20114', 'Prov Salé', 'prov.sale', '*BA553CDFABF67A4D8BFC32653D70B294758B21B6', 'Provincial', '1', 101, NULL, NULL),

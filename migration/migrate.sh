@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Migre l'ancienne base vers le nouveau schéma, puis affiche les contrôles.
 #
-# Usage :  ./migrate.sh ANCIENNE_BASE NOUVELLE_BASE [--reset] [-- options du client mysql]
+# Usage :  ./migrate.sh ANCIENNE_BASE NOUVELLE_BASE [--reset] [--avec-statistiques] [-- options du client mysql]
 #   ex. :  ./migrate.sh entraide_intranet_db entraide --reset -- -uroot -p
 #
+#   --avec-statistiques   migre aussi les périodes et les statistiques (par défaut : non, la nouvelle base démarre sans historique).
 #   --reset   vide d'abord les tables du nouveau schéma (sauf l'historique Flyway). À n'utiliser que sur une base
 #             de migration : les utilisateurs, centres et statistiques déjà présents sont supprimés.
 #
@@ -17,7 +18,12 @@ fi
 
 OLD="$1"; NEW="$2"; shift 2
 RESET=0
-if [[ "${1:-}" == "--reset" ]]; then RESET=1; shift; fi
+STATS=0
+while [[ "${1:-}" == "--reset" || "${1:-}" == "--avec-statistiques" ]]; do
+  [[ "$1" == "--reset" ]] && RESET=1
+  [[ "$1" == "--avec-statistiques" ]] && STATS=1
+  shift
+done
 if [[ "${1:-}" == "--" ]]; then shift; fi
 MYSQL=(mysql --default-character-set=utf8mb4 "$@")
 
@@ -47,6 +53,15 @@ fi
 
 echo "→ Import : $OLD ⇒ $NEW"
 sub "$DIR/01_import.sql" | "${MYSQL[@]}"
+echo "→ Découpage régional (régions des provinces)"
+sub "$DIR/01c_decoupage_regional.sql" | "${MYSQL[@]}"
+if [[ $STATS -eq 1 ]]; then
+  echo "→ Périodes et statistiques"
+  sub "$DIR/01b_statistiques.sql" | "${MYSQL[@]}"
+fi
 
 echo "→ Contrôles"
 sub "$DIR/02_controles.sql" | "${MYSQL[@]}" -t
+if [[ $STATS -eq 1 ]]; then
+  sub "$DIR/02b_controles_statistiques.sql" | "${MYSQL[@]}" -t
+fi
