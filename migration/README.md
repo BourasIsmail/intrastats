@@ -27,6 +27,16 @@ docker compose cp db:/tmp/V6_1__donnees_initiales.sql donnees-initiales/
 
 Puis `docker compose down -v` et `docker compose up --build` : Flyway exécute le fichier une seule fois (version 6.1). Le fichier contient des données personnelles : il est exclu de Git.
 
+### Vérifier que les données sont bien migrées
+
+```powershell
+docker compose exec db rm -rf /migration
+docker compose cp migration db:/migration
+docker compose exec db bash /migration/verifier.sh
+```
+
+Le script compte les lignes de chaque table (avec les valeurs attendues pour les exports fournis), contrôle la cohérence (provinces sans région, centres sans province, comptes sans périmètre...), affiche la répartition par rôle et par région, et l'historique Flyway. Il se termine par « Tout est conforme » ou liste les écarts.
+
 ## Procédure
 
 1. **Sauvegarder** l'ancienne base (`mysqldump`) et la restaurer sur le serveur MySQL 8 de migration, par exemple sous le nom `entraide_intranet_db`.
