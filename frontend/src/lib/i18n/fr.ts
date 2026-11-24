@@ -288,6 +288,9 @@ export const fr = {
   "action.fermer": "Fermer",
   "users.nouveauBouton": "Nouvel utilisateur",
   "periodes.nouvelle": "Nouvelle période",
+  "centre.modifier": "Modifier le centre",
+  "valeur.oui": "Oui",
+  "valeur.non": "Non",
   // --- activités de centre, personnel, catalogue
   "nav.personnel": "Personnel",
   "nav.catalogue": "Catalogue des activités",

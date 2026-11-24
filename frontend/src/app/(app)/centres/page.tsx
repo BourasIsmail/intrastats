@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useTerritoire } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import type { CentreSummary, Page } from "@/lib/types";
+import { CentreForm } from "@/components/CentreForm";
+import { Modal } from "@/components/Modal";
 import { Select } from "@/components/ui";
 
 const TAILLE = 20;
@@ -21,6 +24,8 @@ export default function CentresPage() {
   const [page, setPage] = useState(0);
   const [data, setData] = useState<Page<CentreSummary> | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [creation, setCreation] = useState(false);
+  const router = useRouter();
 
   // La recherche part 300 ms après la dernière frappe.
   useEffect(() => {
@@ -54,7 +59,7 @@ export default function CentresPage() {
           <h1>{t("centres.titre")}</h1>
           <div className="sub">{t("centres.compte", { n: fmt(total) })}</div>
         </div>
-        {can("CENTRE_GERER") && <Link className="btn primary" href="/centres/nouveau">{t("centres.ajouter")}</Link>}
+        {can("CENTRE_GERER") && <button className="btn primary" type="button" onClick={() => setCreation(true)}>{t("centres.ajouter")}</button>}
       </div>
       {erreur && <div className="banner bad" role="alert">{erreur}</div>}
 
@@ -102,6 +107,12 @@ export default function CentresPage() {
           </div>
         </div>
       </section>
+
+      {creation && (
+        <Modal titre={t("centre.nouveau")} large onClose={() => setCreation(false)}>
+          <CentreForm onCancel={() => setCreation(false)} onSaved={(c) => { setCreation(false); router.push(`/centres/${c.id}`); }} />
+        </Modal>
+      )}
     </>
   );
 }

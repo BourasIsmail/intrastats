@@ -290,6 +290,9 @@ export const ar: Record<CleTraduction, string> = {
   "action.fermer": "إغلاق",
   "users.nouveauBouton": "مستخدم جديد",
   "periodes.nouvelle": "فترة جديدة",
+  "centre.modifier": "تعديل المركز",
+  "valeur.oui": "نعم",
+  "valeur.non": "لا",
   // --- activités de centre, personnel, catalogue
   "nav.personnel": "الموظفون",
   "nav.catalogue": "لائحة الأنشطة",
