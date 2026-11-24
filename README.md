@@ -48,7 +48,7 @@ npm test             # règles de validation
 
 ## Reprendre les données de l'ancienne base au premier démarrage
 
-Un fichier `donnees-initiales/V6_1__donnees_initiales.sql` (centres, activités, personnel, comptes... sans les statistiques) est exécuté **une seule fois** par Flyway au premier démarrage, juste après la création des tables. Sans ce fichier, l'application démarre avec une base vide.
+Un fichier `donnees-initiales/V6_1__donnees_initiales.sql` (centres, activités, personnel, comptes... sans les statistiques) est exécuté **une seule fois** par Flyway au premier démarrage, juste après la création des tables. Sans ce fichier, l'application démarre avec une base vide. **Le profil `dev` ignore ce fichier** (il charge à la place les données d'exemple) : laissez `SPRING_PROFILES_ACTIVE=` vide dans `.env`.
 
 ```bash
 docker compose down -v          # base vide (attention : efface la base actuelle)

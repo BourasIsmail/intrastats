@@ -46,6 +46,11 @@ echo "  Activités ouvertes / cessées :"; q "SELECT CONCAT('    ouvertes : ', S
 
 echo; echo "4) Historique Flyway (rempli par l'application)"
 q "SELECT CONCAT('  version ', version, ' - ', description, ' : ', IF(success,'OK','ECHEC')) FROM flyway_schema_history ORDER BY installed_rank" || true
+if [[ -n "$(q "SELECT 1 FROM flyway_schema_history WHERE CAST(SUBSTRING_INDEX(version, '.', 1) AS UNSIGNED) >= 100 LIMIT 1")" ]]; then
+  echo "  ATTENTION : des données d'EXEMPLE (versions 100 et plus, profil dev) sont présentes."
+  echo "  Mettez SPRING_PROFILES_ACTIVE= (vide) dans .env, puis : docker compose down -v ; docker compose up --build"
+  fail=1
+fi
 
 echo
 if [[ $fail -eq 0 ]]; then echo "→ Tout est conforme."; else echo "→ Des écarts sont à examiner (voir ci-dessus)."; exit 1; fi
