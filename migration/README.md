@@ -3,6 +3,19 @@
 Scripts SQL qui reprennent l'ancienne base (`locaux`, `centres`, `regions_nv`, `provinces`, `structures`, `communes`, `activites`,
 `activite_centre`, `personnel`, `users`, et en option `periodicites` et `statistiques`) dans le nouveau schéma. Rien n'est modifié dans l'ancienne base.
 
+## Avec Docker (Windows, PowerShell) : importer vos exports et migrer
+
+Mettez les exports `.sql` (provinces, regions_nv, structures, communes, users, locaux, centres, activites, activite_centre, personnel) dans un dossier, puis, depuis la racine du projet :
+
+```powershell
+docker compose exec db rm -rf /dumps /migration
+docker compose cp C:\Users\hp\Desktop\dumps db:/dumps
+docker compose cp migration db:/migration
+docker compose exec db bash /migration/importer.sh
+```
+
+`importer.sh` recrée la base temporaire `entraide_old`, y charge les fichiers, vérifie que les 10 tables sont présentes (sinon il s'arrête en les nommant), puis lance `migrate.sh --reset` sur la base `entraide`. Ajoutez `--avec-statistiques` à la fin de la dernière commande pour reprendre aussi périodes et statistiques.
+
 ## Procédure
 
 1. **Sauvegarder** l'ancienne base (`mysqldump`) et la restaurer sur le serveur MySQL 8 de migration, par exemple sous le nom `entraide_intranet_db`.
