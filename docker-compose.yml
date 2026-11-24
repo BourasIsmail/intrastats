@@ -31,6 +31,10 @@ services:
       APP_JWT_SECRET: ${APP_JWT_SECRET:?Définissez APP_JWT_SECRET (32 caractères minimum) dans .env}
       APP_COOKIE_SECURE: ${APP_COOKIE_SECURE:-true}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+    volumes:
+      # Données reprises de l'ancienne base (facultatif) : un fichier V6_1__donnees_initiales.sql est exécuté une seule fois
+      # par Flyway au premier démarrage. Le dossier n'est pas versionné (données personnelles).
+      - ./donnees-initiales:/donnees-initiales:ro
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8080'"]
       interval: 15s

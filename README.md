@@ -46,6 +46,18 @@ npm run dev          # http://localhost:3000, relaie /api vers http://localhost:
 npm test             # règles de validation
 ```
 
+## Reprendre les données de l'ancienne base au premier démarrage
+
+Un fichier `donnees-initiales/V6_1__donnees_initiales.sql` (centres, activités, personnel, comptes... sans les statistiques) est exécuté **une seule fois** par Flyway au premier démarrage, juste après la création des tables. Sans ce fichier, l'application démarre avec une base vide.
+
+```bash
+docker compose down -v          # base vide (attention : efface la base actuelle)
+# copier le fichier dans le dossier donnees-initiales/
+docker compose up --build
+```
+
+Le fichier se génère avec `migration/importer.sh` puis `migration/exporter_donnees.sh` (voir `migration/README.md`). Le dossier `donnees-initiales/` n'est **pas versionné** (données personnelles : CIN, adresses, mots de passe chiffrés) : ne le publiez jamais.
+
 ## Rôles et droits
 
 | Rôle | Peut faire |

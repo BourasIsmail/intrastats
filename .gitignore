@@ -6,3 +6,7 @@
 .idea/
 *.iml
 *.tsbuildinfo
+
+# Données personnelles reprises de l'ancienne base : ne jamais les publier
+/donnees-initiales/*
+!/donnees-initiales/LISEZMOI.md

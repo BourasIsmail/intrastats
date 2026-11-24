@@ -22,7 +22,8 @@ spring:
           time_zone: UTC
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    # Le dossier des données initiales est facultatif : absent, Flyway l'ignore (avertissement seulement).
+    locations: classpath:db/migration,filesystem:${APP_DONNEES_INITIALES_DIR:/donnees-initiales}
     baseline-on-migrate: false
   jackson:
     default-property-inclusion: always

@@ -16,6 +16,17 @@ docker compose exec db bash /migration/importer.sh
 
 `importer.sh` recrée la base temporaire `entraide_old`, y charge les fichiers, vérifie que les 11 tables sont présentes (sinon il s'arrête en les nommant), puis lance `migrate.sh --reset` sur la base `entraide`. Ajoutez `--avec-statistiques` à la fin de la dernière commande pour reprendre aussi périodes et statistiques.
 
+### Générer le fichier de données initiales (chargé automatiquement au premier démarrage)
+
+Après `importer.sh` (base `entraide` migrée), exportez-la en un fichier SQL que l'application chargera toute seule sur une base vide :
+
+```powershell
+docker compose exec db bash /migration/exporter_donnees.sh entraide /tmp/V6_1__donnees_initiales.sql
+docker compose cp db:/tmp/V6_1__donnees_initiales.sql donnees-initiales/
+```
+
+Puis `docker compose down -v` et `docker compose up --build` : Flyway exécute le fichier une seule fois (version 6.1). Le fichier contient des données personnelles : il est exclu de Git.
+
 ## Procédure
 
 1. **Sauvegarder** l'ancienne base (`mysqldump`) et la restaurer sur le serveur MySQL 8 de migration, par exemple sous le nom `entraide_intranet_db`.
