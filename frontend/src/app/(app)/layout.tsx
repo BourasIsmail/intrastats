@@ -19,6 +19,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const liens = [
     { href: "/", label: t("nav.tableauDeBord"), visible: true },
     { href: "/centres", label: t("nav.centres"), visible: can("CENTRE_LIRE") },
+    { href: "/personnel", label: t("nav.personnel"), visible: can("PERSONNEL_LIRE") },
+    { href: "/activites", label: t("nav.catalogue"), visible: can("ACTIVITE_GERER") },
     { href: "/statistiques", label: t("nav.statistiques"), visible: can("STATISTIQUE_LIRE") },
     { href: "/periodes", label: t("nav.periodes"), visible: can("PERIODE_GERER") },
     { href: "/utilisateurs", label: t("nav.utilisateurs"), visible: can("UTILISATEUR_GERER") },

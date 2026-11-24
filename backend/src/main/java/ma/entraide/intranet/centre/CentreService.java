@@ -5,6 +5,8 @@ import ma.entraide.intranet.centre.CentreActiviteRepository;
 import ma.entraide.intranet.centre.CentreRepository;
 import ma.entraide.intranet.common.AuditService;
 import ma.entraide.intranet.common.BusinessException;
+import ma.entraide.intranet.personnel.Personnel;
+import ma.entraide.intranet.personnel.PersonnelRepository;
 import ma.entraide.intranet.security.CurrentUser;
 import ma.entraide.intranet.territoire.Province;
 import ma.entraide.intranet.territoire.ScopeService;
@@ -16,8 +18,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -38,24 +42,31 @@ public class CentreService {
                              LocalDate dateConstruction, String telephone, String responsable,
                              FoncierForm foncier, EquipementForm equipement) {}
 
-    public record ActiviteForm(Long activiteId, LocalDate dateOuverture, Integer capacite, String responsable) {}
+    public static final List<String> GESTIONS = List.of("ENTRAIDE_NATIONALE", "ASSOCIATION", "COGESTION", "AUTRE");
+
+    public record ActiviteForm(Long activiteId, LocalDate dateOuverture, Integer capacite, Long responsableId,
+                               Integer superficie, String gestion, String gestionAutre, String partenaire,
+                               LocalDate dateConvention) {}
 
     private final CentreRepository centres;
     private final ActiviteRepository activites;
     private final CentreActiviteRepository centreActivites;
     private final CentreFoncierRepository fonciers;
     private final CentreEquipementRepository equipements;
+    private final PersonnelRepository personnel;
     private final ScopeService scope;
     private final AuditService audit;
 
     public CentreService(CentreRepository centres, ActiviteRepository activites,
                          CentreActiviteRepository centreActivites, CentreFoncierRepository fonciers,
-                         CentreEquipementRepository equipements, ScopeService scope, AuditService audit) {
+                         CentreEquipementRepository equipements, PersonnelRepository personnel,
+                         ScopeService scope, AuditService audit) {
         this.centres = centres;
         this.activites = activites;
         this.centreActivites = centreActivites;
         this.fonciers = fonciers;
         this.equipements = equipements;
+        this.personnel = personnel;
         this.scope = scope;
         this.audit = audit;
     }
@@ -202,18 +213,86 @@ public class CentreService {
         if (f.activiteId() == null || !activites.existsById(f.activiteId())) {
             throw BusinessException.invalid("Activité inconnue", List.of("activiteId : inconnue"));
         }
+        if (!activites.findById(f.activiteId()).map(Activite::isActif).orElse(false)) {
+            throw BusinessException.invalid("Activité retirée du catalogue", List.of("activiteId : activité inactive"));
+        }
         if (centreActivites.existsByCentreIdAndActiviteId(centreId, f.activiteId())) {
             throw BusinessException.conflict("Cette activité existe déjà dans ce centre");
         }
         CentreActivite ca = new CentreActivite();
         ca.setCentreId(centreId);
         ca.setActiviteId(f.activiteId());
-        ca.setDateOuverture(f.dateOuverture() == null ? LocalDate.now() : f.dateOuverture());
-        ca.setCapacite(f.capacite());
-        ca.setResponsable(f.responsable());
+        applyActivity(ca, c, f);
         ca = centreActivites.save(ca);
         audit.log(user.id(), "ACTIVITE_OUVERTE", "centre_activite", ca.getId(), "centre " + centreId);
         return ca;
+    }
+
+    @Transactional
+    public CentreActivite updateActivity(CurrentUser user, Long centreId, Long centreActiviteId, ActiviteForm f) {
+        Centre c = centres.findById(centreId).orElseThrow(() -> BusinessException.notFound("Centre introuvable"));
+        scope.assertCanWrite(user, c.getProvinceId());
+        CentreActivite ca = centreActivites.findById(centreActiviteId)
+                .filter(a -> a.getCentreId().equals(centreId))
+                .orElseThrow(() -> BusinessException.notFound("Activité du centre introuvable"));
+        applyActivity(ca, c, f);
+        audit.log(user.id(), "ACTIVITE_MODIFIEE", "centre_activite", centreActiviteId, "centre " + centreId);
+        return centreActivites.save(ca);
+    }
+
+    /** Valide et copie les champs du formulaire « Données relatives à l'activité dans le centre ». */
+    private void applyActivity(CentreActivite ca, Centre centre, ActiviteForm f) {
+        List<String> erreurs = new ArrayList<>();
+        if (f.capacite() != null && (f.capacite() < 0 || f.capacite() > 99999)) {
+            erreurs.add("capacité d'accueil : entre 0 et 99999");
+        }
+        if (f.superficie() != null && (f.superficie() < 0 || f.superficie() > 999999)) {
+            erreurs.add("superficie : entre 0 et 999999 m²");
+        }
+        String gestion = f.gestion() == null || f.gestion().isBlank() ? null : f.gestion().trim();
+        if (gestion != null && !GESTIONS.contains(gestion)) {
+            erreurs.add("gestion : valeur inconnue");
+        }
+        String gestionAutre = f.gestionAutre() == null || f.gestionAutre().isBlank() ? null : f.gestionAutre().trim();
+        if ("AUTRE".equals(gestion) && gestionAutre == null) {
+            erreurs.add("gestion : précisez « autre »");
+        }
+        String partenaire = f.partenaire() == null || f.partenaire().isBlank() ? null : f.partenaire().trim();
+        if (f.dateConvention() != null && partenaire == null) {
+            erreurs.add("convention : indiquez l'association partenaire");
+        }
+        Personnel responsable = null;
+        if (f.responsableId() != null) {
+            responsable = personnel.findById(f.responsableId()).orElse(null);
+            if (responsable == null) {
+                erreurs.add("responsable : agent inconnu");
+            } else if (!responsable.getProvinceId().equals(centre.getProvinceId())) {
+                erreurs.add("responsable : l'agent doit appartenir à la province du centre");
+            }
+        }
+        if (!erreurs.isEmpty()) {
+            throw BusinessException.invalid("Activité du centre invalide", erreurs);
+        }
+        ca.setDateOuverture(f.dateOuverture() == null
+                ? (ca.getDateOuverture() == null ? LocalDate.now() : ca.getDateOuverture()) : f.dateOuverture());
+        ca.setCapacite(f.capacite());
+        ca.setResponsableId(responsable == null ? null : responsable.getId());
+        if (responsable != null) {
+            ca.setResponsable(null); // ancien texte libre remplacé par l'agent choisi
+        }
+        ca.setSuperficie(f.superficie());
+        ca.setGestion(gestion);
+        ca.setGestionAutre("AUTRE".equals(gestion) ? gestionAutre : null);
+        ca.setPartenaire(partenaire);
+        ca.setDateConvention(partenaire == null ? null : f.dateConvention());
+    }
+
+    /** Nom de l'agent responsable (ou ancien texte libre repris de l'ancienne base). */
+    @Transactional(readOnly = true)
+    public Map<Long, String> responsableNames(List<CentreActivite> list) {
+        List<Long> ids = list.stream().map(CentreActivite::getResponsableId).filter(Objects::nonNull).distinct().toList();
+        return personnel.findByIdIn(ids).stream()
+                .collect(Collectors.toMap(Personnel::getId, p -> p.getNom() + " " + p.getPrenom()));
     }
 
     @Transactional

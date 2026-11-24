@@ -50,9 +50,9 @@ npm test             # règles de validation
 
 | Rôle | Peut faire |
 |---|---|
-| **ADMIN** | Créer, clôturer et rouvrir les périodes ; gérer les utilisateurs ; gérer les centres ; **vérifier** les saisies (valider ou renvoyer) ; tout consulter et exporter |
-| **PROVINCIAL** | Gérer les centres et activités de **sa province** ; saisir et soumettre ses statistiques sur la période ouverte ; consulter ses périodes passées |
-| **REGIONAL** | Consulter et exporter les statistiques et les centres des provinces de **sa région** (lecture seule) |
+| **ADMIN** | Créer, clôturer et rouvrir les périodes ; gérer les utilisateurs ; gérer les centres, le **personnel** et le **catalogue des activités** ; **vérifier** les saisies (valider ou renvoyer) ; tout consulter et exporter |
+| **PROVINCIAL** | Gérer les centres, leurs activités et le personnel de **sa province** ; saisir et soumettre ses statistiques sur la période ouverte ; consulter ses périodes passées |
+| **REGIONAL** | Consulter et exporter les statistiques et les centres des provinces de **sa région** (lecture seule ; pas d'accès au personnel : CIN, adresse, situation familiale) |
 
 Les droits fins sont dans les tables `droit` et `role_droit` : on peut en ajouter sans toucher aux trois rôles.
 
@@ -80,7 +80,10 @@ Le navigateur applique les mêmes règles pour un retour immédiat (`frontend/sr
 | POST | `/api/auth/login`, `/logout` · GET `/api/auth/me` | tous |
 | GET/POST | `/api/periodes` · POST `/{id}/cloturer`, `/{id}/rouvrir` | lecture : tous ; écriture : ADMIN |
 | GET | `/api/regions`, `/api/provinces`, `/api/communes` | selon le périmètre |
-| GET/POST/PUT | `/api/centres`, `/api/centres/{id}` (identité, localisation, foncier, équipements) · POST `/{id}/activites`, `/{id}/activites/{n}/cesser` | lecture : tous ; écriture : ADMIN, PROVINCIAL (sa province) |
+| GET/POST/PUT | `/api/centres`, `/api/centres/{id}` (identité, localisation, foncier, équipements) · POST `/{id}/activites` · PUT `/{id}/activites/{n}` (responsable, capacité, superficie, gestion, partenaire, convention) · POST `/{id}/activites/{n}/cesser` | lecture : tous ; écriture : ADMIN, PROVINCIAL (sa province) |
+| GET | `/api/activites` (liste de choix, activités actives) | tous |
+| GET/POST/PUT | `/api/personnel` (filtres `centreId`, `provinceId`, `q`, `actifSeulement`) | ADMIN, PROVINCIAL (sa province) |
+| GET/POST/PUT | `/api/admin/activites` (catalogue) · GET `/categories` | ADMIN |
 | GET | `/api/statistiques?periodeId&provinceId` | tableau (saisie, vérification ou consultation) |
 | PUT | `/api/statistiques/lignes` · POST `/soumettre`, `/brouillon` | PROVINCIAL |
 | POST | `/api/statistiques/valider`, `/renvoyer` | ADMIN |

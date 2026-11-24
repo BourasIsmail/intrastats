@@ -15,7 +15,7 @@ NEW=entraide_new_test
 echo "→ Ancienne base synthétique ($OLD)"
 sed "s/__OLD__/$OLD/g" "$DIR/ancienne_base_exemple.sql" | "${MYSQL[@]}"
 
-echo "→ Nouveau schéma vide ($NEW), migrations Flyway V1 à V4"
+echo "→ Nouveau schéma vide ($NEW), migrations Flyway V1 à V6"
 "${MYSQL[@]}" -e "DROP DATABASE IF EXISTS $NEW; CREATE DATABASE $NEW CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 for f in "$ROOT"/backend/src/main/resources/db/migration/V*.sql; do "${MYSQL[@]}" "$NEW" < "$f"; done
 
@@ -51,6 +51,18 @@ check "activités par centre (doublon et orphelins écartés)" "6" "SELECT COUNT
 check "sentinelle 2222-12-31 devient NULL"                "NULL" "SELECT IFNULL(date_cessation, 'NULL') FROM $NEW.centre_activite WHERE centre_id = 1 AND activite_id = 1"
 check "vraie date de cessation conservée"                 "2026-10-31" "SELECT date_cessation FROM $NEW.centre_activite WHERE centre_id = 3 AND activite_id = 4"
 check "salles reprises (salle1, salle2)"                  "2" "SELECT COUNT(*) FROM $NEW.salle s JOIN $NEW.centre_activite ca ON ca.id = s.centre_activite_id WHERE ca.centre_id = 1"
+check "personnel migré (sans nom et sans province écartés)" "3" "SELECT COUNT(*) FROM $NEW.personnel"
+check "agent rattaché à la province de son centre"         "Benali|2|2" "SELECT CONCAT(nom, '|', province_id, '|', centre_id) FROM $NEW.personnel WHERE id = 1"
+check "agent sans centre : province de sa délégation"      "2|NULL" "SELECT CONCAT(province_id, '|', IFNULL(centre_id, 'NULL')) FROM $NEW.personnel WHERE id = 2"
+check "dates 0000-00-00 du personnel deviennent NULL"      "NULL|NULL" "SELECT CONCAT(IFNULL(date_naissance, 'NULL'), '|', IFNULL(date_recrutement, 'NULL')) FROM $NEW.personnel WHERE id = 2"
+check "nombre d'enfants borné à 30"                        "30" "SELECT nb_enfants FROM $NEW.personnel WHERE id = 2"
+check "agents non migrés listés dans le rapport"           "2" "SELECT COUNT(*) FROM $NEW.migration_rapport WHERE categorie IN ('personnel_sans_nom', 'personnel_sans_province')"
+check "CIN en double signalé"                              "1" "SELECT COUNT(*) FROM $NEW.migration_rapport WHERE categorie = 'personnel_cin_doublon'"
+check "responsable repris, superficie reprise"             "1|85|ENTRAIDE_NATIONALE" "SELECT CONCAT(responsable_id, '|', superficie, '|', gestion) FROM $NEW.centre_activite WHERE centre_id = 2 AND activite_id = 1"
+check "responsable introuvable laissé vide et signalé"     "NULL|1" "SELECT CONCAT(IFNULL((SELECT responsable_id FROM $NEW.centre_activite WHERE centre_id = 2 AND activite_id = 2), 'NULL'), '|', (SELECT COUNT(*) FROM $NEW.migration_rapport WHERE categorie = 'responsable_introuvable'))"
+check "partenariat et date de convention repris"           "ASSOCIATION|Association Espoir|2020-06-30" "SELECT CONCAT(gestion, '|', partenaire, '|', date_convention) FROM $NEW.centre_activite WHERE centre_id = 2 AND activite_id = 2"
+check "cogestion reconnue"                                 "COGESTION" "SELECT gestion FROM $NEW.centre_activite WHERE centre_id = 3 AND activite_id = 3"
+check "gestion inconnue devient « autre » avec précision"  "AUTRE|Commune de Salé" "SELECT CONCAT(gestion, '|', gestion_autre) FROM $NEW.centre_activite WHERE centre_id = 3 AND activite_id = 4"
 check "périodes (invalide et doublon écartés)"            "3" "SELECT COUNT(*) FROM $NEW.periode"
 check "une seule période ouverte"                         "1" "SELECT COUNT(*) FROM $NEW.periode WHERE statut = 'OUVERTE'"
 check "ligne de test non migrée"                          "0" "SELECT COUNT(*) FROM $NEW.statistique st JOIN $NEW.centre_activite ca ON ca.id = st.centre_activite_id WHERE ca.centre_id = 1 AND ca.activite_id = 1"

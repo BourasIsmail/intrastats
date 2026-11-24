@@ -10,4 +10,6 @@ import java.util.List;
 
 public interface ActiviteRepository extends JpaRepository<Activite, Long> {
     List<Activite> findAllByOrderByNomAsc();
+
+    boolean existsByNomIgnoreCaseAndIdNot(String nom, Long id);
 }

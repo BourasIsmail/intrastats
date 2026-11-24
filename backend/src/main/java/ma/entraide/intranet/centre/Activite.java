@@ -40,4 +40,6 @@ public class Activite {
     private String personnesCibles;
 
     private Integer priorite;
+
+    private boolean actif = true;
 }

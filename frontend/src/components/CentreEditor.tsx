@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { api, post, put } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useTerritoire } from "@/lib/hooks";
+import { ActiviteCentreForm } from "@/components/ActiviteCentreForm";
 import { useI18n } from "@/lib/i18n";
 import type { CatalogueItem, CentreDetail, Commune } from "@/lib/types";
 
@@ -182,23 +183,13 @@ export function CentreEditor({ id }: { id?: number }) {
   }
 
   // ---- activités du centre
-  const [activiteId, setActiviteId] = useState("");
-  const [capacite, setCapacite] = useState("");
+  const [formActivite, setFormActivite] = useState<"ajout" | number | null>(null);
   const [cesser, setCesser] = useState<{ id: number; date: string; motif: string } | null>(null);
 
-  async function ouvrirActivite() {
-    if (!activiteId) return;
-    setMessage(null);
-    try {
-      const c = await post<CentreDetail>(`/api/centres/${id}/activites`, {
-        activiteId: Number(activiteId), capacite: capacite ? Number(capacite) : null,
-      });
-      setCentre(c);
-      setActiviteId("");
-      setCapacite("");
-    } catch (err) {
-      setMessage({ ton: "bad", texte: messageErreur(err) });
-    }
+  function activiteEnregistree(c: CentreDetail) {
+    setCentre(c);
+    setFormActivite(null);
+    setMessage({ ton: "ok", texte: t("act.enregistree") });
   }
 
   async function cesserActivite() {
@@ -334,38 +325,35 @@ export function CentreEditor({ id }: { id?: number }) {
         <section className="card">
           <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", marginBottom: 8 }}>
             <h2>{t("centre.activites")}</h2>
-            {peutModifier && (
-              <div className="filters" style={{ gap: 8 }}>
-                <div className="field" style={{ minWidth: 220 }}>
-                  <label htmlFor="act">{t("centre.ajouterActivite")}</label>
-                  <select id="act" className="select" value={activiteId} onChange={(e) => setActiviteId(e.target.value)}>
-                    <option value="">{t("centre.choisirCatalogue")}</option>
-                    {catalogue.filter((a) => !deja.has(a.id)).map((a) => <option key={a.id} value={a.id}>{nom(a.nom, a.nomAr)}</option>)}
-                  </select>
-                </div>
-                <div className="field" style={{ minWidth: 100, width: 110 }}>
-                  <label htmlFor="cap">{t("centre.capacite")}</label>
-                  <input id="cap" className="input" type="number" min={0} value={capacite} onChange={(e) => setCapacite(e.target.value)} />
-                </div>
-                <button className="btn" type="button" onClick={ouvrirActivite} disabled={!activiteId}>{t("action.ajouter")}</button>
-              </div>
+            {peutModifier && formActivite === null && (
+              <button className="btn" type="button" onClick={() => { setMessage(null); setFormActivite("ajout"); }}>{t("centre.ajouterActivite")}</button>
             )}
           </div>
           <div className="table-wrap">
             <table className="data">
-              <thead><tr><th>{t("centre.colActivite")}</th><th>{t("centre.capacite")}</th><th>{t("centre.colOuverture")}</th><th>{t("centre.colEtat")}</th><th><span className="sr-only">{t("users.colActions")}</span></th></tr></thead>
+              <thead><tr><th>{t("centre.colActivite")}</th><th>{t("act.colResponsable")}</th><th>{t("centre.capacite")}</th><th>{t("act.colSuperficie")}</th><th>{t("act.colGestion")}</th><th>{t("centre.colOuverture")}</th><th>{t("centre.colEtat")}</th><th><span className="sr-only">{t("users.colActions")}</span></th></tr></thead>
               <tbody>
                 {centre?.activites.map((a) => (
                   <tr key={a.id}>
                     <td><strong>{nom(a.nom, a.nomAr)}</strong></td>
-                    <td className="num" style={{ textAlign: "left" }}>{a.capacite ?? ""}</td>
+                    <td>{a.responsable ?? ""}</td>
+                    <td className="num" style={{ textAlign: "start" }}>{a.capacite ?? ""}</td>
+                    <td className="num" style={{ textAlign: "start" }}>{a.superficie ?? ""}</td>
+                    <td>
+                      {a.gestion ? t(`act.gestion.${a.gestion}`) : ""}
+                      {a.gestion === "AUTRE" && a.gestionAutre ? ` : ${a.gestionAutre}` : ""}
+                      {a.partenaire && <div className="muted" style={{ fontSize: 12 }}>{a.partenaire}{a.dateConvention ? ` · ${a.dateConvention}` : ""}</div>}
+                    </td>
                     <td className="muted">{a.dateOuverture ?? ""}</td>
                     <td>
                       {a.dateCessation
                         ? <span className="chip grey" title={a.motifCessation ?? undefined}>{t("centre.cessee", { date: a.dateCessation })}</span>
                         : <span className="chip ok">{t("centre.ouverte")}</span>}
                     </td>
-                    <td style={{ textAlign: "right" }}>
+                    <td style={{ textAlign: "end" }}>
+                      {peutModifier && (
+                        <button className="btn link" type="button" onClick={() => { setMessage(null); setFormActivite(a.id); }}>{t("action.modifier")}</button>
+                      )}{" "}
                       {peutModifier && !a.dateCessation && (
                         <button className="btn link" type="button"
                                 onClick={() => setCesser({ id: a.id, date: new Date().toISOString().slice(0, 10), motif: "" })}>{t("centre.cesser")}</button>
@@ -373,10 +361,19 @@ export function CentreEditor({ id }: { id?: number }) {
                     </td>
                   </tr>
                 ))}
-                {centre && centre.activites.length === 0 && <tr><td colSpan={5} className="muted">{t("centre.aucuneActivite")}</td></tr>}
+                {centre && centre.activites.length === 0 && <tr><td colSpan={8} className="muted">{t("centre.aucuneActivite")}</td></tr>}
               </tbody>
             </table>
           </div>
+          {peutModifier && formActivite === "ajout" && (
+            <ActiviteCentreForm centreId={id!} catalogue={catalogue} deja={deja} onSaved={activiteEnregistree}
+                                onCancel={() => setFormActivite(null)} />
+          )}
+          {peutModifier && typeof formActivite === "number" && centre?.activites.find((a) => a.id === formActivite) && (
+            <ActiviteCentreForm key={formActivite} centreId={id!} catalogue={catalogue} deja={deja}
+                                edition={centre.activites.find((a) => a.id === formActivite)}
+                                onSaved={activiteEnregistree} onCancel={() => setFormActivite(null)} />
+          )}
           {cesser && (
             <div className="filters" style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" }}>
               <div className="field"><label htmlFor="dcess">{t("centre.dateCessation")}</label>

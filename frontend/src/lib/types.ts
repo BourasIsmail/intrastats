@@ -169,6 +169,58 @@ export interface ActiviteDto {
   dateOuverture: string | null;
   dateCessation: string | null;
   motifCessation: string | null;
+  responsableId: number | null;
+  superficie: number | null;
+  gestion: Gestion | null;
+  gestionAutre: string | null;
+  partenaire: string | null;
+  dateConvention: string | null;
+}
+
+export type Gestion = "ENTRAIDE_NATIONALE" | "ASSOCIATION" | "COGESTION" | "AUTRE";
+export const GESTIONS: Gestion[] = ["ENTRAIDE_NATIONALE", "ASSOCIATION", "COGESTION", "AUTRE"];
+
+export interface PersonnelDto {
+  id: number;
+  matricule: string | null;
+  nom: string;
+  prenom: string;
+  cin: string | null;
+  dateNaissance: string | null;
+  lieuNaissance: string | null;
+  sexe: "M" | "F" | null;
+  dateRecrutement: string | null;
+  fonction: string | null;
+  autreFonction: string | null;
+  provinceId: number;
+  centreId: number | null;
+  centreNom: string | null;
+  adresse: string | null;
+  telephone: string | null;
+  situationFamiliale: string | null;
+  nbEnfants: number;
+  niveauScolaire: string | null;
+  actif: boolean;
+}
+
+export interface ActiviteCatalogue {
+  id: number;
+  nom: string;
+  nomAr: string | null;
+  abreviation: string | null;
+  description: string | null;
+  categorieId: number;
+  categorie: string | null;
+  typeActivite: string;
+  personnesCibles: string | null;
+  priorite: number | null;
+  actif: boolean;
+  nbCentres: number;
+}
+
+export interface CategorieActivite {
+  id: number;
+  libelle: string;
 }
 
 export interface CentreDetail {

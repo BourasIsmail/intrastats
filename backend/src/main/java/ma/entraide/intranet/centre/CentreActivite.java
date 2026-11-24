@@ -49,6 +49,17 @@ public class CentreActivite {
 
     private String partenaire;
 
+    @Column(name = "responsable_id")
+    private Long responsableId;
+
+    private Integer superficie;
+
+    @Column(name = "gestion_autre")
+    private String gestionAutre;
+
+    @Column(name = "date_convention")
+    private LocalDate dateConvention;
+
     /** Vraie si l'activité fonctionne pendant au moins un jour de la période [debut, fin]. */
     public boolean activeSur(LocalDate debut, LocalDate fin) {
         boolean ouverteAvantFin = dateOuverture == null || !dateOuverture.isAfter(fin);

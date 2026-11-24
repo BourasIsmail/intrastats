@@ -454,4 +454,166 @@ class ApiIntegrationTest {
         mvc.perform(with(post("/api/utilisateurs"), admin).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"nom\":\"X\",\"login\":\"x.prov\",\"role\":\"PROVINCIAL\"}")).andExpect(status().isUnprocessableEntity());
     }
+
+    // ------------------------------------------------------------ activités des centres, personnel, catalogue
+
+    private JsonNode json(MvcResult r) throws Exception {
+        return body(r);
+    }
+
+    @Test
+    void activityFormCarriesManagerAreaManagementAndConvention() throws Exception {
+        Cookie prov = login("prov.sale", "prov2026");
+        // les données d'exemple : activité 2 du centre 2 (responsable, superficie, gestion)
+        JsonNode centre = body(mvc.perform(with(get("/api/centres/2"), prov)).andExpect(status().isOk()).andReturn());
+        JsonNode alpha = null;
+        for (JsonNode a : centre.get("activites")) {
+            if (a.get("id").asLong() == 2) alpha = a;
+        }
+        assertThat(alpha).isNotNull();
+        assertThat(alpha.get("responsable").asText()).isEqualTo("Benali Samira");
+        assertThat(alpha.get("superficie").asInt()).isEqualTo(45);
+        assertThat(alpha.get("gestion").asText()).isEqualTo("ENTRAIDE_NATIONALE");
+
+        // ouverture avec tous les champs du formulaire (centre 4, activité 4 = couture)
+        String ok = "{\"activiteId\":4,\"dateOuverture\":\"2026-09-01\",\"capacite\":25,\"responsableId\":2,"
+                + "\"superficie\":60,\"gestion\":\"COGESTION\",\"partenaire\":\"Association Al Amal\","
+                + "\"dateConvention\":\"2026-08-20\"}";
+        JsonNode apres = body(mvc.perform(with(post("/api/centres/4/activites"), prov)
+                .contentType(MediaType.APPLICATION_JSON).content(ok)).andExpect(status().isOk()).andReturn());
+        JsonNode nouvelle = null;
+        for (JsonNode a : apres.get("activites")) {
+            if (a.get("activiteId").asLong() == 4) nouvelle = a;
+        }
+        assertThat(nouvelle).isNotNull();
+        assertThat(nouvelle.get("responsable").asText()).isEqualTo("Alaoui Youssef");
+        assertThat(nouvelle.get("partenaire").asText()).isEqualTo("Association Al Amal");
+        assertThat(nouvelle.get("dateConvention").asText()).isEqualTo("2026-08-20");
+
+        // modification : passage à « autre » exige la précision, et efface le partenaire inutile s'il est vidé
+        long caId = nouvelle.get("id").asLong();
+        String autreSansPrecision = "{\"gestion\":\"AUTRE\",\"capacite\":25}";
+        mvc.perform(with(put("/api/centres/4/activites/" + caId), prov).contentType(MediaType.APPLICATION_JSON)
+                .content(autreSansPrecision)).andExpect(status().isUnprocessableEntity());
+        JsonNode maj = body(mvc.perform(with(put("/api/centres/4/activites/" + caId), prov)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"gestion\":\"AUTRE\",\"gestionAutre\":\"Commune\",\"capacite\":30}"))
+                .andExpect(status().isOk()).andReturn());
+        JsonNode modifiee = null;
+        for (JsonNode a : maj.get("activites")) {
+            if (a.get("id").asLong() == caId) modifiee = a;
+        }
+        assertThat(modifiee.get("gestionAutre").asText()).isEqualTo("Commune");
+        assertThat(modifiee.get("capacite").asInt()).isEqualTo(30);
+        assertThat(modifiee.get("partenaire").isNull()).isTrue();
+    }
+
+    @Test
+    void activityFormRejectsInvalidValues() throws Exception {
+        Cookie prov = login("prov.sale", "prov2026");
+        // date de convention sans association
+        mvc.perform(with(post("/api/centres/4/activites"), prov).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"activiteId\":4,\"dateConvention\":\"2026-08-20\"}")).andExpect(status().isUnprocessableEntity());
+        // gestion inconnue
+        mvc.perform(with(post("/api/centres/4/activites"), prov).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"activiteId\":4,\"gestion\":\"PIRATE\"}")).andExpect(status().isUnprocessableEntity());
+        // capacité négative
+        mvc.perform(with(post("/api/centres/4/activites"), prov).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"activiteId\":4,\"capacite\":-3}")).andExpect(status().isUnprocessableEntity());
+        // responsable d'une autre province (agent 3 = Kénitra)
+        mvc.perform(with(post("/api/centres/4/activites"), prov).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"activiteId\":4,\"responsableId\":3}")).andExpect(status().isUnprocessableEntity());
+        // activité déjà présente dans le centre
+        mvc.perform(with(post("/api/centres/2/activites"), prov).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"activiteId\":1}")).andExpect(status().isConflict());
+        // centre d'une autre province
+        mvc.perform(with(post("/api/centres/5/activites"), prov).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"activiteId\":4}")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void personnelIsScopedAndRegionalHasNoAccess() throws Exception {
+        Cookie prov = login("prov.sale", "prov2026");
+        JsonNode liste = body(mvc.perform(with(get("/api/personnel"), prov)).andExpect(status().isOk()).andReturn());
+        assertThat(liste.get("total").asInt()).isEqualTo(3);      // Salé seulement
+        JsonNode parCentre = body(mvc.perform(with(get("/api/personnel?centreId=2&actifSeulement=true"), prov))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(parCentre.get("total").asInt()).isEqualTo(2);
+
+        // un agent de Kénitra est invisible pour Salé
+        mvc.perform(with(get("/api/personnel/3"), prov)).andExpect(status().isForbidden());
+        mvc.perform(with(get("/api/personnel?provinceId=" + KENITRA), prov)).andExpect(status().isForbidden());
+
+        // création : la province vient du centre ; CIN en double refusé
+        String agent = "{\"nom\":\"Nouri\",\"prenom\":\"Hind\",\"cin\":\"Z900001\",\"sexe\":\"F\",\"centreId\":2,\"nbEnfants\":1}";
+        JsonNode cree = body(mvc.perform(with(post("/api/personnel"), prov).contentType(MediaType.APPLICATION_JSON).content(agent))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(cree.get("provinceId").asLong()).isEqualTo(SALE);
+        assertThat(cree.get("centreNom").asText()).isEqualTo("Centre Tabriquet");
+        mvc.perform(with(post("/api/personnel"), prov).contentType(MediaType.APPLICATION_JSON).content(agent))
+                .andExpect(status().isConflict());
+        // un provincial ne peut pas créer un agent dans le centre d'une autre province
+        mvc.perform(with(post("/api/personnel"), prov).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"nom\":\"X\",\"prenom\":\"Y\",\"centreId\":5}")).andExpect(status().isForbidden());
+        // sexe invalide
+        mvc.perform(with(post("/api/personnel"), prov).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"nom\":\"X\",\"prenom\":\"Y\",\"sexe\":\"Q\"}")).andExpect(status().isUnprocessableEntity());
+
+        // modification
+        long id = cree.get("id").asLong();
+        JsonNode maj = body(mvc.perform(with(put("/api/personnel/" + id), prov).contentType(MediaType.APPLICATION_JSON)
+                .content(agent.replace("\"nbEnfants\":1", "\"nbEnfants\":2,\"actif\":false")))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(maj.get("nbEnfants").asInt()).isEqualTo(2);
+        assertThat(maj.get("actif").asBoolean()).isFalse();
+
+        // le régional n'a aucun accès au personnel
+        Cookie reg = login("reg.rsk", "reg2026");
+        mvc.perform(with(get("/api/personnel"), reg)).andExpect(status().isForbidden());
+        mvc.perform(with(post("/api/personnel"), reg).contentType(MediaType.APPLICATION_JSON).content(agent))
+                .andExpect(status().isForbidden());
+
+        // l'admin voit tout
+        Cookie admin = login("admin", "admin2026");
+        JsonNode tout = body(mvc.perform(with(get("/api/personnel"), admin)).andExpect(status().isOk()).andReturn());
+        assertThat(tout.get("total").asInt()).isGreaterThanOrEqualTo(5);
+    }
+
+    @Test
+    void onlyAdminManagesTheActivityCatalogue() throws Exception {
+        Cookie prov = login("prov.sale", "prov2026");
+        Cookie admin = login("admin", "admin2026");
+        mvc.perform(with(get("/api/admin/activites"), prov)).andExpect(status().isForbidden());
+
+        JsonNode categories = body(mvc.perform(with(get("/api/admin/activites/categories"), admin))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(categories.get(0).get("libelle").asText()).contains("›");
+
+        String act = "{\"nom\":\"Cuisine collective\",\"nomAr\":\"الطبخ\",\"abreviation\":\"CUIS\",\"categorieId\":2,"
+                + "\"typeActivite\":\"principale\"}";
+        JsonNode cree = body(mvc.perform(with(post("/api/admin/activites"), admin).contentType(MediaType.APPLICATION_JSON).content(act))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(cree.get("typeActivite").asText()).isEqualTo("PRINCIPALE");
+        assertThat(cree.get("actif").asBoolean()).isTrue();
+        mvc.perform(with(post("/api/admin/activites"), admin).contentType(MediaType.APPLICATION_JSON).content(act))
+                .andExpect(status().isConflict());                       // nom déjà pris
+        mvc.perform(with(post("/api/admin/activites"), prov).contentType(MediaType.APPLICATION_JSON).content(act))
+                .andExpect(status().isForbidden());
+        mvc.perform(with(post("/api/admin/activites"), admin).contentType(MediaType.APPLICATION_JSON)
+                .content(act.replace("\"categorieId\":2", "\"categorieId\":999").replace("Cuisine collective", "Autre")))
+                .andExpect(status().isUnprocessableEntity());
+
+        // le provincial voit la nouvelle activité dans la liste de choix…
+        long id = cree.get("id").asLong();
+        JsonNode choix = body(mvc.perform(with(get("/api/activites"), prov)).andExpect(status().isOk()).andReturn());
+        assertThat(choix.toString()).contains("Cuisine collective");
+
+        // …jusqu'à ce que l'admin la retire du catalogue : elle n'est plus proposée ni ouvrable
+        mvc.perform(with(put("/api/admin/activites/" + id), admin).contentType(MediaType.APPLICATION_JSON)
+                .content(act.replace("}", ",\"actif\":false}"))).andExpect(status().isOk());
+        choix = body(mvc.perform(with(get("/api/activites"), prov)).andExpect(status().isOk()).andReturn());
+        assertThat(choix.toString()).doesNotContain("Cuisine collective");
+        mvc.perform(with(post("/api/centres/4/activites"), prov).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"activiteId\":" + id + "}")).andExpect(status().isUnprocessableEntity());
+    }
 }

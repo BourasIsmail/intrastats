@@ -19,6 +19,7 @@ region ─< province ─< commune
 province ─< centre ─< centre_activite >─ activite >─ activite_categorie >─ axe >─ programme
 centre ──1:1── centre_foncier, centre_equipement
 centre_activite ─< salle
+centre_activite >─ personnel (responsable)      personnel >─ province, centre (facultatif)
 periode ─< saisie_province >─ province          (statut : BROUILLON, SOUMIS, VALIDE, A_CORRIGER)
 periode ─< statistique >─ centre_activite       (8 indicateurs + état du centre + motif)
 utilisateur (rôle ADMIN | PROVINCIAL | REGIONAL, rattaché à une province ou une région)
@@ -62,6 +63,20 @@ Tout accès (lecture, écriture, export) passe par ce service, jamais par un fil
 Une activité figure dans le tableau d'une période si elle fonctionnait pendant cette période **ou** si des chiffres existent déjà
 pour elle sur cette période : l'historique repris de l'ancienne base reste donc visible même quand une activité a cessé depuis
 ou que sa date d'ouverture a été reprise de façon approximative.
+
+## Activités d'un centre, personnel, catalogue
+
+- **Activité d'un centre** (`centre_activite`) : activité du catalogue, date d'ouverture, responsable (un agent du personnel de la même
+  province), capacité d'accueil, superficie globale, gestion (Entraide Nationale, Association, Cogestion, Autre avec précision),
+  association partenaire et date de la convention. Règles : « Autre » exige une précision ; une date de convention exige l'association ;
+  une activité ne peut être ouverte qu'une fois par centre. Les salles (`salle1`..`salle6`) de l'ancienne base sont reprises dans `salle`
+  mais ne sont pas encore modifiables dans l'interface.
+- **Personnel** : table complète (identité, CIN, naissance, recrutement, fonction, adresse, situation familiale, enfants, niveau).
+  Accès réservé à l'ADMIN et au PROVINCIAL de la province (droits `PERSONNEL_LIRE`, `PERSONNEL_GERER`) ; le régional n'y a pas accès.
+  Pas de suppression : un agent est marqué inactif.
+- **Catalogue des activités** : géré par l'ADMIN seul (droit `ACTIVITE_GERER`). Une activité retirée n'est plus proposée mais son
+  historique et ses statistiques restent. La hiérarchie programme › axe › catégorie est reprise de l'ancienne base ; on choisit
+  seulement la catégorie (pas encore d'écran pour créer programmes, axes et catégories).
 
 ## Interface bilingue
 

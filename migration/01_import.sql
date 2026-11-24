@@ -1,7 +1,7 @@
 -- ============================================================================================
 -- Migration de l'ancienne base (__OLD__) vers le nouveau schéma (__NEW__).
 --
--- Prérequis : le nouveau schéma existe (migrations Flyway V1 à V4 appliquées, SANS le jeu d'exemples V100)
+-- Prérequis : le nouveau schéma existe (migrations Flyway V1 à V6 appliquées, SANS le jeu d'exemples V100)
 -- et les deux bases sont sur le même serveur MySQL 8. Lancer avec migration/migrate.sh.
 --
 -- Principes :
@@ -168,6 +168,45 @@ JOIN __NEW__.activite_categorie cat ON cat.axe_id = ax.id
 WHERE TRIM(a.activite) <> '';
 
 -- --------------------------------------------------------------------------------------------
+-- 3b. Personnel (identifiants conservés : activite_centre.id_responsable y fait référence)
+--     Province = celle du centre (id_local) si connu, sinon celle dont la structure est la délégation (id_structure).
+--     Non repris : som, verif, verif1, prov, id_str2, id_activite (sens non confirmé).
+-- --------------------------------------------------------------------------------------------
+CREATE TEMPORARY TABLE tmp_personnel AS
+SELECT p.*, COALESCE(c.province_id, (SELECT MIN(op.id) FROM __OLD__.provinces op WHERE op.id_delegation = p.id_structure)) AS province_resolue,
+       c.id AS centre_resolu
+FROM __OLD__.personnel p
+LEFT JOIN __NEW__.centre c ON c.id = p.id_local;
+
+INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
+SELECT 'personnel_sans_nom', t.id, 'agent sans nom : non migré' FROM tmp_personnel t WHERE TRIM(t.nom) = '';
+
+INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
+SELECT 'personnel_sans_province', t.id, CONCAT('agent « ', t.nom, ' » : ni centre ni structure reconnus, non migré')
+FROM tmp_personnel t
+WHERE TRIM(t.nom) <> '' AND (t.province_resolue IS NULL OR NOT EXISTS (SELECT 1 FROM __NEW__.province np WHERE np.id = t.province_resolue));
+
+INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
+SELECT 'personnel_cin_doublon', MIN(t.id), CONCAT('CIN ', t.cin, ' : ', COUNT(*), ' agents')
+FROM tmp_personnel t WHERE TRIM(t.cin) <> '' GROUP BY t.cin HAVING COUNT(*) > 1;
+
+INSERT INTO __NEW__.personnel (id, matricule, nom, prenom, cin, date_naissance, lieu_naissance, sexe, date_recrutement, fonction,
+                               autre_fonction, province_id, centre_id, adresse, telephone, situation_familiale, nb_enfants,
+                               niveau_scolaire, actif)
+SELECT t.id, NULLIF(TRIM(t.matricule), ''), TRIM(t.nom), COALESCE(NULLIF(TRIM(t.prenom), ''), '-'), NULLIF(TRIM(t.cin), ''),
+       CASE WHEN t.date_naissance >= '1900-01-01' AND t.date_naissance <= CURDATE() THEN t.date_naissance END,
+       NULLIF(TRIM(t.lieu_naissance), ''),
+       CASE UPPER(TRIM(t.sexe)) WHEN 'M' THEN 'M' WHEN 'F' THEN 'F' END,
+       CASE WHEN t.date_recrutement >= '1950-01-01' AND t.date_recrutement <= CURDATE() THEN t.date_recrutement END,
+       NULLIF(TRIM(t.fonction), ''), NULLIF(TRIM(t.autre_fonction), ''), t.province_resolue, t.centre_resolu,
+       LEFT(CONCAT_WS(' — ', NULLIF(TRIM(t.adresse), ''), NULLIF(TRIM(t.adresse2), '')), 400),
+       NULLIF(TRIM(t.tel), ''), NULLIF(TRIM(t.situation_familiale), ''), GREATEST(0, LEAST(30, COALESCE(t.nb_enfants, 0))),
+       NULLIF(TRIM(t.niveau_scolaire), ''), TRUE
+FROM tmp_personnel t
+WHERE TRIM(t.nom) <> '' AND t.province_resolue IS NOT NULL
+  AND EXISTS (SELECT 1 FROM __NEW__.province np WHERE np.id = t.province_resolue);
+
+-- --------------------------------------------------------------------------------------------
 -- 4. Activités ouvertes dans les centres (+ salles)
 -- --------------------------------------------------------------------------------------------
 INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
@@ -191,12 +230,32 @@ SELECT x.* FROM (
       AND EXISTS (SELECT 1 FROM __NEW__.activite a WHERE a.id = ac.id_activite)
 ) x WHERE x.rn = 1;
 
-INSERT INTO __NEW__.centre_activite (centre_id, activite_id, capacite, date_ouverture, date_cessation, motif_cessation, gestion, partenaire)
-SELECT t.id_centre, t.id_activite, NULLIF(t.capacite, 0),
+INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
+SELECT 'responsable_introuvable', t.Id, CONCAT('centre ', t.id_centre, ' / activité ', t.id_activite, ' : id_responsable ', t.id_responsable, ' absent du personnel migré, laissé vide')
+FROM tmp_activite_centre t
+WHERE t.id_responsable IS NOT NULL AND t.id_responsable <> 0
+  AND NOT EXISTS (SELECT 1 FROM __NEW__.personnel pe WHERE pe.id = t.id_responsable);
+
+-- gestion : liste Entraide Nationale / Association / Cogestion / Autre ; toute autre valeur devient « Autre » avec le texte d'origine.
+INSERT INTO __NEW__.centre_activite (centre_id, activite_id, responsable_id, capacite, superficie, date_ouverture, date_cessation,
+                                     motif_cessation, gestion, gestion_autre, partenaire, date_convention)
+SELECT t.id_centre, t.id_activite,
+       (SELECT pe.id FROM __NEW__.personnel pe WHERE pe.id = t.id_responsable),
+       NULLIF(t.capacite, 0), NULLIF(t.superficie, 0),
        CASE WHEN t.date_ouvert_act >= '1990-01-01' THEN DATE(t.date_ouvert_act) ELSE DATE '1970-01-01' END,
        CASE WHEN t.date_cessation >= '1990-01-01' AND t.date_cessation < '2200-01-01' THEN t.date_cessation END,
-       NULLIF(TRIM(t.motif), ''), NULLIF(TRIM(t.gestion), ''),
-       COALESCE(NULLIF(TRIM(t.association), ''), NULLIF(TRIM(t.association2), ''))
+       NULLIF(TRIM(t.motif), ''),
+       CASE WHEN TRIM(t.gestion) = '' THEN NULL
+            WHEN LOWER(t.gestion) LIKE '%entraide%' THEN 'ENTRAIDE_NATIONALE'
+            WHEN LOWER(t.gestion) LIKE '%cogestion%' OR LOWER(t.gestion) LIKE '%co-gestion%' OR LOWER(t.gestion) LIKE '%co gestion%' THEN 'COGESTION'
+            WHEN LOWER(t.gestion) LIKE '%association%' THEN 'ASSOCIATION'
+            ELSE 'AUTRE' END,
+       CASE WHEN TRIM(t.gestion) = '' OR LOWER(t.gestion) LIKE '%entraide%' OR LOWER(t.gestion) LIKE '%cogestion%'
+                 OR LOWER(t.gestion) LIKE '%co-gestion%' OR LOWER(t.gestion) LIKE '%co gestion%' OR LOWER(t.gestion) LIKE '%association%' THEN NULL
+            ELSE COALESCE(NULLIF(TRIM(t.gestion_autre), ''), TRIM(t.gestion)) END,
+       COALESCE(NULLIF(TRIM(t.association), ''), NULLIF(TRIM(t.association2), '')),
+       CASE WHEN t.date_conv >= '1990-01-01' AND t.date_conv <= CURDATE()
+                 AND COALESCE(NULLIF(TRIM(t.association), ''), NULLIF(TRIM(t.association2), '')) IS NOT NULL THEN t.date_conv END
 FROM tmp_activite_centre t;
 
 INSERT INTO __NEW__.salle (centre_activite_id, numero, superficie)

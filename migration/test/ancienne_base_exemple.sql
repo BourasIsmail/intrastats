@@ -59,6 +59,14 @@ CREATE TABLE activite_centre (
   nature_construction varchar(40) NOT NULL, aeration varchar(15) NOT NULL, gestion varchar(20) NOT NULL, gestion_autre varchar(200) NOT NULL,
   association varchar(200) NOT NULL, association2 varchar(200) NOT NULL, date_conv date NOT NULL DEFAULT '0000-00-00',
   type_gestion varchar(20) NOT NULL, type_partenaire varchar(20) NOT NULL, date_saisie date NOT NULL DEFAULT '0000-00-00');
+CREATE TABLE personnel (
+  id int NOT NULL AUTO_INCREMENT PRIMARY KEY, matricule varchar(10) NOT NULL DEFAULT '', nom varchar(30) NOT NULL DEFAULT '',
+  prenom varchar(15) NOT NULL DEFAULT '', cin varchar(10) NOT NULL DEFAULT '', date_naissance date NOT NULL DEFAULT '0000-00-00',
+  lieu_naissance varchar(100) NOT NULL, sexe char(1) NOT NULL DEFAULT '', date_recrutement date NOT NULL DEFAULT '0000-00-00',
+  fonction varchar(35) NOT NULL DEFAULT '', autre_fonction varchar(30) NOT NULL, id_structure int NOT NULL DEFAULT 0,
+  id_local int NOT NULL DEFAULT 0, id_activite int NOT NULL DEFAULT 0, prov varchar(100) NOT NULL DEFAULT '', id_str2 int NOT NULL DEFAULT 0,
+  adresse text NOT NULL, adresse2 varchar(255) NOT NULL, tel varchar(50) NOT NULL DEFAULT '', situation_familiale varchar(20) NOT NULL,
+  nb_enfants int NOT NULL DEFAULT 0, niveau_scolaire varchar(25) NOT NULL, som varchar(20) NOT NULL, verif tinyint NOT NULL DEFAULT 0, verif1 int NOT NULL DEFAULT 0);
 CREATE TABLE periodicites (
   id int NOT NULL AUTO_INCREMENT PRIMARY KEY, mois int NOT NULL DEFAULT 0, annee int NOT NULL DEFAULT 0, annee_stat varchar(4) NOT NULL,
   etat tinyint(1) NOT NULL DEFAULT 0, pour_stat tinyint(1) NOT NULL DEFAULT 1);
@@ -118,17 +126,26 @@ INSERT INTO activites (id, activite, abrev, programme, axe, categorie2, personne
   (3, 'Éducation préscolaire', 'PRESC', 'Éducation et formation', 'Cohésion sociale', 'Alphabétisation et éducation', 'Enfants', 1, 'principale'),
   (4, 'Couture et broderie', 'COUT', 'Éducation et formation', 'Insertion', 'Formation professionnelle', 'Femmes', 3, 'secondaire'),
   (5, 'Activité sans classement', '', '', '', '', '', 9, 'principale');
-INSERT INTO activite_centre (id_centre, id_activite, capacite, date_ouvert_act, etat, date_cessation, motif, salle1, salle2, nb_salles,
-                             gestion, association, association2) VALUES
-  (1, 1, 60, '2019-10-01 00:00:00', 'Ouvert', '2222-12-31', '', 30, 25, 2, 'Directe', '', ''),
-  (2, 1, 60, '2019-10-01 00:00:00', 'Ouvert', '2222-12-31', '', 40, 0, 1, 'Directe', '', ''),
-  (2, 2, 20, '2021-02-03 00:00:00', 'Ouvert', '2222-12-31', '', 20, 0, 1, 'Partenaire', 'Association Espoir', ''),
-  (3, 3, 30, '2012-09-01 00:00:00', 'Ouvert', '2222-12-31', '', 0, 0, 0, 'Directe', '', ''),
-  (3, 4, 25, '2018-09-15 00:00:00', 'Fermé', '2026-10-31', 'Travaux', 0, 0, 0, 'Directe', '', ''),
-  (3, 4, 25, '0000-00-00 00:00:00', 'Ouvert', '2222-12-31', '', 0, 0, 0, 'Directe', '', ''),   -- doublon centre + activité
-  (4, 1, 50, '0000-00-00 00:00:00', 'Ouvert', '2222-12-31', '', 0, 0, 0, 'Directe', '', ''),   -- date d'ouverture invalide
-  (77, 1, 10, '2020-01-01 00:00:00', 'Ouvert', '2222-12-31', '', 0, 0, 0, '', '', ''),         -- centre inexistant
-  (1, 88, 10, '2020-01-01 00:00:00', 'Ouvert', '2222-12-31', '', 0, 0, 0, '', '', '');         -- activité inexistante
+-- ---------------------------------------------------------------- personnel
+INSERT INTO personnel (id, matricule, nom, prenom, cin, date_naissance, sexe, date_recrutement, fonction, id_structure, id_local,
+                       adresse, adresse2, tel, nb_enfants, niveau_scolaire, lieu_naissance, autre_fonction, situation_familiale, som) VALUES
+  (1, 'M100', 'Benali', 'Samira', 'A100001', '1985-03-12', 'F', '2010-09-01', 'Monitrice', 101, 2, 'Rue 1', 'Salé', '0600000001', 2, 'Bac', '', '', 'Mariée', ''),
+  (2, 'M101', 'Alaoui', 'Youssef', 'A100002', '0000-00-00', 'M', '0000-00-00', 'Directeur', 101, 0, '', '', '', 40, '', '', '', '', ''),
+  (3, 'M102', 'Sans Centre', 'Nadia', 'A100003', '1990-01-01', 'F', '2015-01-01', 'Monitrice', 0, 0, '', '', '', 0, '', '', '', '', ''),
+  (4, 'M103', '', 'Anonyme', '', '0000-00-00', '', '0000-00-00', '', 101, 2, '', '', '', 0, '', '', '', '', ''),
+  (5, 'M104', 'Doublon', 'Cin', 'A100001', '1980-01-01', 'M', '2000-01-01', 'Gardien', 101, 2, '', '', '', 1, '', '', '', '', '');
+
+INSERT INTO activite_centre (id_centre, id_responsable, id_activite, capacite, superficie, date_ouvert_act, etat, date_cessation, motif, salle1, salle2, nb_salles,
+                             gestion, gestion_autre, association, association2, date_conv) VALUES
+  (1, NULL, 1, 60, 0, '2019-10-01 00:00:00', 'Ouvert', '2222-12-31', '', 30, 25, 2, 'Entraide Nationale', '', '', '', '0000-00-00'),
+  (2, 1, 1, 60, 85, '2019-10-01 00:00:00', 'Ouvert', '2222-12-31', '', 40, 0, 1, 'Entraide Nationale', '', '', '', '0000-00-00'),
+  (2, 99, 2, 20, 0, '2021-02-03 00:00:00', 'Ouvert', '2222-12-31', '', 20, 0, 1, 'Association', '', 'Association Espoir', '', '2020-06-30'),
+  (3, NULL, 3, 30, 0, '2012-09-01 00:00:00', 'Ouvert', '2222-12-31', '', 0, 0, 0, 'Cogestion', '', 'Association Nour', '', '0000-00-00'),
+  (3, NULL, 4, 25, 0, '2018-09-15 00:00:00', 'Fermé', '2026-10-31', 'Travaux', 0, 0, 0, 'Commune', 'Commune de Salé', '', '', '0000-00-00'),
+  (3, NULL, 4, 25, 0, '0000-00-00 00:00:00', 'Ouvert', '2222-12-31', '', 0, 0, 0, 'Directe', '', '', '', '0000-00-00'),   -- doublon centre + activité
+  (4, NULL, 1, 50, 0, '0000-00-00 00:00:00', 'Ouvert', '2222-12-31', '', 0, 0, 0, 'Directe', '', '', '', '0000-00-00'),   -- date d'ouverture invalide
+  (77, NULL, 1, 10, 0, '2020-01-01 00:00:00', 'Ouvert', '2222-12-31', '', 0, 0, 0, '', '', '', '', '0000-00-00'),         -- centre inexistant
+  (1, NULL, 88, 10, 0, '2020-01-01 00:00:00', 'Ouvert', '2222-12-31', '', 0, 0, 0, '', '', '', '', '0000-00-00');         -- activité inexistante
 
 -- ---------------------------------------------------------------- périodes et statistiques
 INSERT INTO periodicites (id, mois, annee, annee_stat, etat, pour_stat) VALUES

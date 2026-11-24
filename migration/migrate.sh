@@ -35,7 +35,7 @@ if [[ "$nb" != "0" ]]; then
     "${MYSQL[@]}" -e "
       SET FOREIGN_KEY_CHECKS = 0;
       TRUNCATE $NEW.journal_audit; TRUNCATE $NEW.statistique; TRUNCATE $NEW.saisie_province; TRUNCATE $NEW.periode;
-      TRUNCATE $NEW.salle; TRUNCATE $NEW.centre_activite; TRUNCATE $NEW.activite; TRUNCATE $NEW.activite_categorie;
+      TRUNCATE $NEW.salle; TRUNCATE $NEW.centre_activite; TRUNCATE $NEW.personnel; TRUNCATE $NEW.activite; TRUNCATE $NEW.activite_categorie;
       TRUNCATE $NEW.axe; TRUNCATE $NEW.programme; TRUNCATE $NEW.centre_equipement; TRUNCATE $NEW.centre_foncier;
       TRUNCATE $NEW.centre; TRUNCATE $NEW.utilisateur; TRUNCATE $NEW.commune; TRUNCATE $NEW.province; TRUNCATE $NEW.region;
       SET FOREIGN_KEY_CHECKS = 1;"

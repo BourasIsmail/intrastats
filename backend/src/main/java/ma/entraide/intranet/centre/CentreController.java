@@ -32,7 +32,9 @@ public class CentreController {
                                 String provinceNom, String type, int nbActivites) {}
 
     public record ActiviteDto(Long id, Long activiteId, String nom, String nomAr, Integer capacite, String responsable,
-                              LocalDate dateOuverture, LocalDate dateCessation, String motifCessation) {}
+                              LocalDate dateOuverture, LocalDate dateCessation, String motifCessation,
+                              Long responsableId, Integer superficie, String gestion, String gestionAutre,
+                              String partenaire, LocalDate dateConvention) {}
 
     public record FoncierDto(String propriete, String situationFonciere, String proprietaire,
                              BigDecimal loyerMensuel, BigDecimal chargesLocatives, String numeroContrat,
@@ -68,7 +70,15 @@ public class CentreController {
         }
     }
 
-    public record ActiviteRequest(Long activiteId, LocalDate dateOuverture, Integer capacite, String responsable) {}
+    public record ActiviteRequest(Long activiteId, LocalDate dateOuverture, Integer capacite, Long responsableId,
+                                  Integer superficie, @Size(max = 40) String gestion,
+                                  @Size(max = 200) String gestionAutre, @Size(max = 200) String partenaire,
+                                  LocalDate dateConvention) {
+        CentreService.ActiviteForm toForm() {
+            return new CentreService.ActiviteForm(activiteId, dateOuverture, capacite, responsableId, superficie,
+                    gestion, gestionAutre, partenaire, dateConvention);
+        }
+    }
 
     public record CessationRequest(LocalDate date, @Size(max = 255) String motif) {}
 
@@ -125,8 +135,15 @@ public class CentreController {
     @PostMapping("/centres/{id}/activites")
     @PreAuthorize("hasAuthority('CENTRE_GERER')")
     public CentreDetail openActivity(@PathVariable Long id, @RequestBody ActiviteRequest r) {
-        service.openActivity(current.get(), id,
-                new CentreService.ActiviteForm(r.activiteId(), r.dateOuverture(), r.capacite(), r.responsable()));
+        service.openActivity(current.get(), id, r.toForm());
+        return detail(service.get(current.get(), id));
+    }
+
+    @PutMapping("/centres/{id}/activites/{centreActiviteId}")
+    @PreAuthorize("hasAuthority('CENTRE_GERER')")
+    public CentreDetail updateActivity(@PathVariable Long id, @PathVariable Long centreActiviteId,
+                                       @Valid @RequestBody ActiviteRequest r) {
+        service.updateActivity(current.get(), id, centreActiviteId, r.toForm());
         return detail(service.get(current.get(), id));
     }
 
@@ -141,17 +158,22 @@ public class CentreController {
     @GetMapping("/activites")
     @PreAuthorize("hasAuthority('CENTRE_LIRE')")
     public List<CatalogueItem> catalog() {
-        return service.catalog().stream().map(a -> new CatalogueItem(a.getId(), a.getNom(), a.getNomAr(), a.getAbreviation())).toList();
+        return service.catalog().stream().filter(Activite::isActif).map(a -> new CatalogueItem(a.getId(), a.getNom(), a.getNomAr(), a.getAbreviation())).toList();
     }
 
     private CentreDetail detail(Centre c) {
         Map<Long, Activite> catalog = service.activityCatalog();
-        List<ActiviteDto> activites = service.activitiesOf(c.getId()).stream()
+        List<CentreActivite> liees = service.activitiesOf(c.getId());
+        Map<Long, String> responsables = service.responsableNames(liees);
+        List<ActiviteDto> activites = liees.stream()
                 .map(a -> new ActiviteDto(a.getId(), a.getActiviteId(),
                         catalog.containsKey(a.getActiviteId()) ? catalog.get(a.getActiviteId()).getNom() : "?",
                         catalog.containsKey(a.getActiviteId()) ? catalog.get(a.getActiviteId()).getNomAr() : null,
-                        a.getCapacite(), a.getResponsable(), a.getDateOuverture(), a.getDateCessation(),
-                        a.getMotifCessation()))
+                        a.getCapacite(),
+                        a.getResponsableId() != null ? responsables.get(a.getResponsableId()) : a.getResponsable(),
+                        a.getDateOuverture(), a.getDateCessation(), a.getMotifCessation(),
+                        a.getResponsableId(), a.getSuperficie(), a.getGestion(), a.getGestionAutre(),
+                        a.getPartenaire(), a.getDateConvention()))
                 .toList();
         FoncierDto foncier = service.foncierOf(c.getId())
                 .map(f -> new FoncierDto(f.getPropriete(), f.getSituationFonciere(), f.getProprietaire(),
