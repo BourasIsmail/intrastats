@@ -314,7 +314,7 @@ export const fr = {
   "act.erreurActivite": "Choisissez une activité.",
   "act.erreurAutre": "Précisez le mode de gestion « autre ».",
   "act.erreurConvention": "Indiquez l'association pour la date de convention.",
-  "act.erreurNombre": "Capacité et superficie : entiers positifs ou nuls.",
+  "act.erreurNombre": "Capacité et superficie : entiers supérieurs à 0.",
   "act.enregistree": "Activité enregistrée.",
   "act.aucunAgent": "Aucun agent actif dans ce centre : ajoutez-le dans la page Personnel.",
   "pers.titre": "Personnel",

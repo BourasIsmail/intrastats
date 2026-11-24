@@ -19,7 +19,7 @@ interface Props {
 
 const entierOuNull = (v: string): number | null | undefined => {
   if (v.trim() === "") return null;
-  return /^\d{1,6}$/.test(v.trim()) ? Number(v.trim()) : undefined; // undefined = invalide
+  return /^\d{1,6}$/.test(v.trim()) && Number(v.trim()) > 0 ? Number(v.trim()) : undefined; // undefined = invalide (entier > 0 exigé)
 };
 
 /** Formulaire « Données relatives à l'activité dans le centre » (ajout et modification). */
@@ -110,9 +110,9 @@ export function ActiviteCentreForm({ centreId, catalogue, deja, edition, onSaved
             {options.map((a) => <option key={a.id} value={a.id}>{`${a.nom} ${a.prenom}`.trim()}</option>)}
           </select>)}
         {ligne(t("act.capacite"), "fa-cap",
-          <input id="fa-cap" className="input" inputMode="numeric" value={capacite} onChange={(e) => setCapacite(e.target.value)} dir="ltr" />)}
+          <input id="fa-cap" className="input" type="number" min={1} step={1} max={99999} value={capacite} onChange={(e) => setCapacite(e.target.value)} dir="ltr" />)}
         {ligne(t("act.superficie"), "fa-sup",
-          <input id="fa-sup" className="input" inputMode="numeric" value={superficie} onChange={(e) => setSuperficie(e.target.value)} dir="ltr" />)}
+          <input id="fa-sup" className="input" type="number" min={1} step={1} max={999999} value={superficie} onChange={(e) => setSuperficie(e.target.value)} dir="ltr" />)}
         {ligne(t("act.gestion"), "fa-gest",
           <select id="fa-gest" className="select" value={gestion} onChange={(e) => setGestion(e.target.value as Gestion | "")}>
             <option value="">{t("act.choisir")}</option>

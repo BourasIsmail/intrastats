@@ -517,6 +517,11 @@ class ApiIntegrationTest {
         // gestion inconnue
         mvc.perform(with(post("/api/centres/4/activites"), prov).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"activiteId\":4,\"gestion\":\"PIRATE\"}")).andExpect(status().isUnprocessableEntity());
+        // capacité et superficie : zéro refusé (valeurs supérieures à 0)
+        mvc.perform(with(post("/api/centres/4/activites"), prov).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"activiteId\":4,\"capacite\":0}")).andExpect(status().isUnprocessableEntity());
+        mvc.perform(with(post("/api/centres/4/activites"), prov).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"activiteId\":4,\"superficie\":0}")).andExpect(status().isUnprocessableEntity());
         // capacité négative
         mvc.perform(with(post("/api/centres/4/activites"), prov).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"activiteId\":4,\"capacite\":-3}")).andExpect(status().isUnprocessableEntity());

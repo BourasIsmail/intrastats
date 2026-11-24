@@ -243,11 +243,11 @@ public class CentreService {
     /** Valide et copie les champs du formulaire « Données relatives à l'activité dans le centre ». */
     private void applyActivity(CentreActivite ca, Centre centre, ActiviteForm f) {
         List<String> erreurs = new ArrayList<>();
-        if (f.capacite() != null && (f.capacite() < 0 || f.capacite() > 99999)) {
-            erreurs.add("capacité d'accueil : entre 0 et 99999");
+        if (f.capacite() != null && (f.capacite() < 1 || f.capacite() > 99999)) {
+            erreurs.add("capacité d'accueil : entre 1 et 99999");
         }
-        if (f.superficie() != null && (f.superficie() < 0 || f.superficie() > 999999)) {
-            erreurs.add("superficie : entre 0 et 999999 m²");
+        if (f.superficie() != null && (f.superficie() < 1 || f.superficie() > 999999)) {
+            erreurs.add("superficie : entre 1 et 999999 m²");
         }
         String gestion = f.gestion() == null || f.gestion().isBlank() ? null : f.gestion().trim();
         if (gestion != null && !GESTIONS.contains(gestion)) {

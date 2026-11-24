@@ -316,7 +316,7 @@ export const ar: Record<CleTraduction, string> = {
   "act.erreurActivite": "اختر نشاطا.",
   "act.erreurAutre": "حدد طريقة التدبير « آخر ».",
   "act.erreurConvention": "أدخل اسم الجمعية مع تاريخ الاتفاقية.",
-  "act.erreurNombre": "الطاقة الاستيعابية والمساحة : أعداد صحيحة موجبة أو صفر.",
+  "act.erreurNombre": "الطاقة الاستيعابية والمساحة : أعداد صحيحة أكبر من 0.",
   "act.enregistree": "تم حفظ النشاط.",
   "act.aucunAgent": "لا يوجد موظف نشيط في هذا المركز : أضفه من صفحة الموظفين.",
   "pers.titre": "الموظفون",
