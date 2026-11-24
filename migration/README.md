@@ -27,7 +27,6 @@ docker compose exec db bash /migration/importer.sh
    ```
    `--reset` vide d'abord le nouveau schéma. Sans lui, le script refuse de tourner si le nouveau schéma contient déjà des données.
    Les périodes et statistiques ne sont **pas** migrées par défaut (l'application démarre sans historique) ; ajouter `--avec-statistiques` pour les reprendre (`01b_statistiques.sql`).
-   Après l'import, `01c_decoupage_regional.sql` rattache chaque province à sa région (voir ci-dessous).
 4. **Lire les contrôles** affichés à la fin :
    - comptages ancien / nouveau / écartés, tous à `OK` ;
    - avec `--avec-statistiques` : totaux de bénéficiaires par période, identiques, à `OK` ;
