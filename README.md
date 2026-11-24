@@ -48,7 +48,7 @@ npm test             # règles de validation
 
 ## Reprendre les données de l'ancienne base au premier démarrage
 
-Un fichier `donnees-initiales/V6_1__donnees_initiales.sql` (centres, activités, personnel, comptes... sans les statistiques) est exécuté **une seule fois** par Flyway au premier démarrage, juste après la création des tables. Sans ce fichier, l'application démarre avec une base vide. **Le profil `dev` ignore ce fichier** (il charge à la place les données d'exemple) : laissez `SPRING_PROFILES_ACTIVE=` vide dans `.env`.
+Un fichier `donnees-initiales/V6_1__donnees_initiales.sql` (centres, activités, personnel, comptes) est exécuté **une seule fois** par Flyway au premier démarrage, juste après la création des tables. Sans ce fichier, l'application démarre avec une base vide. **Le profil `dev` ignore ce fichier** (il charge à la place les données d'exemple) : laissez `SPRING_PROFILES_ACTIVE=` vide dans `.env`.
 
 ```bash
 docker compose down -v          # base vide (attention : efface la base actuelle)
@@ -56,7 +56,9 @@ docker compose down -v          # base vide (attention : efface la base actuelle
 docker compose up --build
 ```
 
-Le fichier se génère avec `migration/importer.sh` puis `migration/exporter_donnees.sh` (voir `migration/README.md`). Le dossier `donnees-initiales/` n'est **pas versionné** (données personnelles : CIN, adresses, mots de passe chiffrés) : ne le publiez jamais.
+Un second fichier facultatif, `V6_2__statistiques_initiales.sql` (périodes et 627 772 lignes de statistiques depuis 2012, environ 50 Mo), se charge de la même façon, juste après le premier : le démarrage prend alors une quarantaine de secondes de plus.
+
+Les fichiers se génèrent avec `migration/importer.sh` puis `migration/exporter_donnees.sh` (voir `migration/README.md`). Le dossier `donnees-initiales/` n'est **pas versionné** (données personnelles : CIN, adresses, mots de passe chiffrés) : ne le publiez jamais.
 
 ## Rôles et droits
 

@@ -25,7 +25,17 @@ docker compose exec db bash /migration/exporter_donnees.sh entraide /tmp/V6_1__d
 docker compose cp db:/tmp/V6_1__donnees_initiales.sql donnees-initiales/
 ```
 
-Puis `docker compose down -v` et `docker compose up --build` : Flyway exécute le fichier une seule fois (version 6.1). Le fichier contient des données personnelles : il est exclu de Git.
+Puis `docker compose down -v` et `docker compose up --build` : Flyway exécute le fichier une seule fois (version 6.1).
+
+**Avec l'historique des statistiques** : mettez aussi `periodicites.sql` et `statistiques.sql` dans le dossier d'exports, lancez `importer.sh` avec `--avec-statistiques` (il vérifie la présence de ces deux tables), puis exportez le second fichier :
+
+```powershell
+docker compose exec db bash /migration/importer.sh /dumps --avec-statistiques
+docker compose exec db bash /migration/exporter_donnees.sh entraide /tmp/V6_2__statistiques_initiales.sql --statistiques
+docker compose cp db:/tmp/V6_2__statistiques_initiales.sql donnees-initiales/
+```
+
+Sur l'export examiné : 165 périodes (164 clôturées, septembre 2026 ouverte), 627 772 statistiques migrées, 15 586 lignes écartées car leur centre ou leur activité n'est pas migré, et les totaux de bénéficiaires de chacune des 148 périodes sont identiques entre l'ancienne et la nouvelle base. Le fichier contient des données personnelles : il est exclu de Git.
 
 ### Vérifier que les données sont bien migrées
 
@@ -89,7 +99,7 @@ temporaire » : l'application leur demande de le changer.
 
 Ces points sont des hypothèses faites faute d'avoir vu les données :
 
-1. `periodicites.etat = 1` signifie « période ouverte ». Si c'est l'inverse, changer `@etat_periode_ouverte` en haut de `01_import.sql`.
+1. `periodicites.etat = 1` : période encore ouverte à la saisie. Plusieurs périodes le sont à la fois dans l'ancienne base (janvier à septembre 2026) : seule la plus récente reste ouverte, les autres sont clôturées.
 2. `nb_pers_part` = agents des associations et `nb_pers_prom` = agents autre département.
 3. La valeur « admin » dans `users.type` (sinon aucun compte ADMIN n'est reconnu : en créer un dans l'application).
 4. Le lien `users.id_structure` → `provinces.id_delegation` / `regions.id_coordination`.

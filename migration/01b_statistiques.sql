@@ -7,7 +7,8 @@ SET SESSION sql_mode = 'NO_ENGINE_SUBSTITUTION';
 SET NAMES utf8mb4;
 USE __NEW__;
 
--- Hypothèse à confirmer : periodicites.etat = 1 signifie « période ouverte » (0 = clôturée).
+-- periodicites.etat = 1 : période encore ouverte à la saisie. Sur l'export examiné, plusieurs périodes le sont à la fois
+-- (janvier à septembre 2026) ; le nouveau système n'en admet qu'une : seule la plus récente reste ouverte.
 SET @etat_periode_ouverte = 1;
 
 -- --------------------------------------------------------------------------------------------
@@ -35,23 +36,37 @@ WHERE statut = 'OUVERTE'
   AND id <> (SELECT m.id FROM (SELECT id FROM __NEW__.periode WHERE statut = 'OUVERTE' ORDER BY annee DESC, mois DESC LIMIT 1) m);
 
 INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
-SELECT 'statistique_test', COUNT(*), 'lignes marquées test=1 : non migrées' FROM __OLD__.statistiques WHERE test <> 0 HAVING COUNT(*) > 0;
+SELECT 'periode_ouverte_cloturee', COUNT(*), 'périodes ouvertes dans l''ancienne base mais clôturées ici : une seule période peut être ouverte (la plus récente)'
+FROM __OLD__.periodicites o
+WHERE o.etat = @etat_periode_ouverte AND o.mois BETWEEN 1 AND 12 AND o.annee >= 1990
+  AND NOT EXISTS (SELECT 1 FROM __NEW__.periode np WHERE np.annee = o.annee AND np.mois = o.mois AND np.statut = 'OUVERTE')
+HAVING COUNT(*) > 0;
 
 INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
-SELECT 'statistique_orpheline', CONCAT(s.id_centre, '/', s.id_activite, '/', s.id_periodicite),
-       'centre/activité ou période introuvable dans le nouveau schéma : ligne écartée'
+SELECT 'statistique_test', COUNT(*), 'lignes marquées test=1 : non migrées' FROM __OLD__.statistiques WHERE test <> 0 HAVING COUNT(*) > 0;
+
+-- Lignes écartées, comptées par cause (une ligne de rapport par cause : il y en a des milliers).
+INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
+SELECT 'statistique_sans_activite_de_centre', COUNT(*), 'lignes dont le couple (centre, activité) n''existe pas dans le nouveau système (centre ou activité non migré) : écartées'
+FROM __OLD__.statistiques s
+WHERE s.test = 0 AND NOT EXISTS (SELECT 1 FROM __NEW__.centre_activite ca WHERE ca.centre_id = s.id_centre AND ca.activite_id = s.id_activite)
+HAVING COUNT(*) > 0;
+
+INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
+SELECT 'statistique_sans_periode', COUNT(*), 'lignes rattachées à une période inconnue ou invalide : écartées'
 FROM __OLD__.statistiques s
 LEFT JOIN __OLD__.periodicites p ON p.id = s.id_periodicite
 LEFT JOIN __NEW__.periode np ON np.annee = p.annee AND np.mois = p.mois
-LEFT JOIN __NEW__.centre_activite ca ON ca.centre_id = s.id_centre AND ca.activite_id = s.id_activite
-WHERE s.test = 0 AND (np.id IS NULL OR ca.id IS NULL);
+WHERE s.test = 0 AND np.id IS NULL
+HAVING COUNT(*) > 0;
 
 INSERT INTO __NEW__.statistique (centre_activite_id, periode_id, masculins, feminins, alphabetisation, agents_titulaires,
                                  agents_vacataires, agents_volontaires, agents_associations, agents_autre_dep,
                                  etat_centre, motif, updated_at)
 SELECT x.ca_id, x.periode_id, x.nb_beneficiaires_m, x.nb_beneficiaires_f, x.nb_beneficiaires_alph, x.nb_pers_entraide_tit,
        x.nb_pers_entraide_vac, x.nb_pers_entraide_vol, x.nb_pers_part, x.nb_pers_prom,
-       CASE WHEN LOWER(x.etat_centre) LIKE 'actif%' OR TRIM(x.etat_centre) = '' THEN 'ACTIF'
+       -- « Actif » parfois tronqué (« Ac », « A ») dans l'ancienne base : tout ce qui commence par « a » est actif.
+       CASE WHEN LOWER(x.etat_centre) LIKE 'a%' OR TRIM(x.etat_centre) = '' THEN 'ACTIF'
             WHEN LOWER(x.etat_centre) LIKE '%définitiv%' OR LOWER(x.etat_centre) LIKE '%definitiv%' THEN 'FERME_DEFINITIVEMENT'
             ELSE 'FERME_TEMPORAIREMENT' END,
        LEFT(NULLIF(TRIM(x.motif), ''), 500),
@@ -68,12 +83,13 @@ FROM (
 WHERE x.rn = 1;
 
 INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
-SELECT 'statistique_hors_bornes', st.id, 'valeur négative ou supérieure à 99 999 : reprise telle quelle, à vérifier'
+SELECT 'statistique_hors_bornes', COUNT(*), 'lignes avec une valeur négative ou supérieure à 99 999 : reprises telles quelles, à vérifier'
 FROM __NEW__.statistique st
 WHERE LEAST(IFNULL(masculins,0), IFNULL(feminins,0), IFNULL(alphabetisation,0), IFNULL(agents_titulaires,0), IFNULL(agents_vacataires,0),
             IFNULL(agents_volontaires,0), IFNULL(agents_associations,0), IFNULL(agents_autre_dep,0)) < 0
    OR GREATEST(IFNULL(masculins,0), IFNULL(feminins,0), IFNULL(alphabetisation,0), IFNULL(agents_titulaires,0), IFNULL(agents_vacataires,0),
-            IFNULL(agents_volontaires,0), IFNULL(agents_associations,0), IFNULL(agents_autre_dep,0)) > 99999;
+            IFNULL(agents_volontaires,0), IFNULL(agents_associations,0), IFNULL(agents_autre_dep,0)) > 99999
+HAVING COUNT(*) > 0;
 
 -- Etat de la saisie par province : les périodes clôturées sont historiques donc VALIDE ; la période ouverte reste en BROUILLON.
 INSERT INTO __NEW__.saisie_province (province_id, periode_id, statut)

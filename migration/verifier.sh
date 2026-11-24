@@ -44,6 +44,18 @@ echo "  Comptes par rôle :";        q "SELECT CONCAT('    ', role, ' : ', COUNT
 echo "  Centres par région (5 premières) :"; q "SELECT CONCAT('    ', r.nom_fr, ' : ', COUNT(*)) FROM centre c JOIN province p ON p.id=c.province_id JOIN region r ON r.id=p.region_id GROUP BY r.id ORDER BY COUNT(*) DESC LIMIT 5"
 echo "  Activités ouvertes / cessées :"; q "SELECT CONCAT('    ouvertes : ', SUM(date_cessation IS NULL), ' - cessées : ', SUM(date_cessation IS NOT NULL)) FROM centre_activite"
 
+if [[ "$(q "SELECT COUNT(*) FROM periode")" != "0" ]]; then
+  echo; echo "3b) Périodes et statistiques"
+  compte periode 165; compte saisie_province 11205; compte statistique 627772
+  zero "plus d'une période ouverte"                  "SELECT IF(SUM(statut='OUVERTE')>1,1,0) FROM periode"
+  zero "statistiques sans période ou activité"       "SELECT COUNT(*) FROM statistique s LEFT JOIN periode p ON p.id=s.periode_id LEFT JOIN centre_activite ca ON ca.id=s.centre_activite_id WHERE p.id IS NULL OR ca.id IS NULL"
+  zero "états de centre invalides"                   "SELECT COUNT(*) FROM statistique WHERE etat_centre NOT IN ('ACTIF','FERME_TEMPORAIREMENT','FERME_DEFINITIVEMENT')"
+  echo "  Période ouverte :"; q "SELECT CONCAT('    ', mois, '/', annee) FROM periode WHERE statut='OUVERTE'"
+  echo "  Saisies par statut :"; q "SELECT CONCAT('    ', statut, ' : ', COUNT(*)) FROM saisie_province GROUP BY statut"
+else
+  echo; echo "3b) Périodes et statistiques : aucune (non migrées ou fichier V6_2 absent)"
+fi
+
 echo; echo "4) Historique Flyway (rempli par l'application)"
 q "SELECT CONCAT('  version ', version, ' - ', description, ' : ', IF(success,'OK','ECHEC')) FROM flyway_schema_history ORDER BY installed_rank" || true
 if [[ -n "$(q "SELECT 1 FROM flyway_schema_history WHERE CAST(SUBSTRING_INDEX(version, '.', 1) AS UNSIGNED) >= 100 LIMIT 1")" ]]; then
