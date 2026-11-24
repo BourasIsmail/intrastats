@@ -173,7 +173,7 @@ INSERT INTO statistiques (id_activite, id_centre, id_periodicite, nb_beneficiair
 -- ---------------------------------------------------------------- utilisateurs
 INSERT INTO structures (id, type, nom, id_parent) VALUES (900, 'coordination', 'Coordination RSK', 1), (901, 'coordination', 'Coordination Fès', 1),
   (100, 'delegation', 'Délégation Rabat', 900), (101, 'delegation', 'Délégation Salé', 900), (102, 'delegation', 'Délégation Kénitra', 900),
-  (103, 'delegation', 'Délégation Fès', 901);
+  (103, 'delegation', 'Délégation Fès', 901), (8, 'message_admin', 'Administration de l''intranet', NULL);
 INSERT INTO users (id, matricule, nom, login, password, type, state, id_structure, e_mail, last_connexion_at) VALUES
   (1, '10482', 'Administrateur', 'admin', '*C73FDAE2818CD9BD13FED162B2DE48B9088047BE', 'Administrateur', '1', 0, 'admin@exemple.ma', '2026-11-20 08:00:00'),
   (2, '20114', 'Prov Salé', 'prov.sale', '*BA553CDFABF67A4D8BFC32653D70B294758B21B6', 'Provincial', '1', 101, NULL, NULL),
@@ -184,3 +184,5 @@ INSERT INTO users (id, matricule, nom, login, password, type, state, id_structur
   (7, '', 'Sans périmètre', 'orphelin', '*BA553CDFABF67A4D8BFC32653D70B294758B21B6', 'Provincial', '1', 555, NULL, NULL),    -- structure inconnue
   (8, '20113', 'Matricule en double', 'doublon.mat', '*94BDCEBE19083CE2A1F959FD02F964C7AF4CFC29', 'Provincial', '1', 100, NULL, NULL),
   (9, '20116', 'Login en double', 'admin', '*94BDCEBE19083CE2A1F959FD02F964C7AF4CFC29', 'Provincial', '1', 100, NULL, NULL);
+INSERT INTO users (id, matricule, nom, login, password, type, state, id_structure, passwd2, id_session) VALUES
+  (20, '', 'Administration', 'webadmin', '*0123456789ABCDEF0123456789ABCDEF01234567', '', '1', 8, '', '');   -- admin reconnu par sa structure

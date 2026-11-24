@@ -56,10 +56,10 @@ docker compose exec db bash /migration/importer.sh
 
 ### Utilisateurs : règles de déduction
 
-- `type` contenant « admin » → **ADMIN** ;
+- `type` contenant « admin », ou structure de type `message_admin` (comptes `admin` et `webadmin`) → **ADMIN** ;
 - sinon `id_structure` = `provinces.id_delegation` d'une province → **PROVINCIAL** de cette province ;
 - sinon `id_structure` = `regions_nv.id_coordination` d'une région → **REGIONAL** de cette région ;
-- sinon : compte **non migré**, listé dans le rapport (à créer à la main dans l'application).
+- sinon (services centraux, divisions, direction, inspection...) : compte **non migré**, listé dans le rapport (à créer à la main dans l'application avec le rôle voulu).
 
 Les comptes qui partagent le même mot de passe (par exemple un mot de passe par défaut) sont marqués « mot de passe
 temporaire » : l'application leur demande de le changer.
@@ -80,6 +80,7 @@ Ces points sont des hypothèses faites faute d'avoir vu les données :
 Essai fait avec les vrais exports de `regions_nv`, `provinces`, `structures`, `communes`, `locaux`, `centres`, `activites`, `activite_centre` et `personnel` (les tables `users`, `periodicites` et `statistiques` n'avaient pas été fournies). Durée : environ 1,5 s.
 
 - 12 régions, 82 provinces (toutes avec leur nom arabe) et 2 028 communes migrées (26 communes sans nom et 5 sans province écartées).
+- Comptes : 165 PROVINCIAL (les 82 provinces ont au moins un compte, la plupart en ont deux : `xxx` et `xxx2`), 2 ADMIN, 1 REGIONAL (`coord_marrakech`) ; 66 comptes non migrés (services centraux sans province, un identifiant en double, un mot de passe corrompu). 11 comptes partagent un mot de passe : changement forcé à la première connexion.
 - 266 agents sans province (structures centrales, sans centre) ou sans nom ne sont pas migrés.
 - `centres` contient 437 lignes sans `locaux` correspondant (ni nom, ni province) : non migrées, listées (`centre_sans_local`).
 - 143 locaux ont `id_province = 0` : non migrés (`centre_sans_province`) ; avec les précédents, 243 liaisons centre-activité sont écartées (`activite_centre_orpheline`).

@@ -312,21 +312,27 @@ WHERE s.superficie > 0;
 --    Rôle et périmètre sont déduits de la structure de rattachement :
 --      * structure = délégation d'une province (provinces.id_delegation)  -> PROVINCIAL de cette province ;
 --      * structure = coordination d'une région (regions_nv.id_coordination)  -> REGIONAL de cette région ;
---      * type contenant « admin »                                          -> ADMIN.
+--      * type contenant « admin », ou structure de type message_admin     -> ADMIN.
+--      * toute autre structure (services centraux, divisions...) : compte non migré, listé dans le rapport.
 --    Les mots de passe restent au format MySQL PASSWORD() : préfixe {mysql}, remplacés par bcrypt à la première connexion.
 -- --------------------------------------------------------------------------------------------
 CREATE TEMPORARY TABLE tmp_users AS
-SELECT u.id, NULLIF(TRIM(u.matricule), '') AS matricule, COALESCE(NULLIF(TRIM(u.nom), ''), TRIM(u.login)) AS nom,
-       TRIM(u.login) AS login, u.password, u.state, u.e_mail, u.last_connexion_at,
-       CASE WHEN LOWER(u.type) LIKE '%admin%' THEN 'ADMIN'
+-- Textes convertis en utf8mb4 : l'ancienne table est en latin1 et MySQL refuse de mélanger ses colonnes avec des
+-- messages accentués (erreur « Illegal mix of collations »).
+SELECT u.id, CONVERT(NULLIF(TRIM(u.matricule), '') USING utf8mb4) AS matricule,
+       CONVERT(COALESCE(NULLIF(TRIM(u.nom), ''), TRIM(u.login)) USING utf8mb4) AS nom,
+       CONVERT(TRIM(u.login) USING utf8mb4) AS login, CONVERT(u.password USING utf8mb4) AS password,
+       u.state, CONVERT(u.e_mail USING utf8mb4) AS e_mail, u.last_connexion_at,
+       CASE WHEN (LOWER(u.type) LIKE '%admin%' OR su.type = 'message_admin') THEN 'ADMIN'
             WHEN pv.id IS NOT NULL THEN 'PROVINCIAL'
             WHEN rg.id IS NOT NULL THEN 'REGIONAL' END AS role,
-       CASE WHEN LOWER(u.type) LIKE '%admin%' THEN NULL ELSE pv.id END AS province_id,
-       CASE WHEN LOWER(u.type) LIKE '%admin%' OR pv.id IS NOT NULL THEN NULL ELSE rg.id END AS region_id,
+       CASE WHEN (LOWER(u.type) LIKE '%admin%' OR su.type = 'message_admin') THEN NULL ELSE pv.id END AS province_id,
+       CASE WHEN (LOWER(u.type) LIKE '%admin%' OR su.type = 'message_admin') OR pv.id IS NOT NULL THEN NULL ELSE rg.id END AS region_id,
        ROW_NUMBER() OVER (PARTITION BY TRIM(u.login) ORDER BY u.id) AS rn_login,
        ROW_NUMBER() OVER (PARTITION BY NULLIF(TRIM(u.matricule), '') ORDER BY u.id) AS rn_mat,
        COUNT(*) OVER (PARTITION BY u.password) AS nb_meme_hash
 FROM __OLD__.users u
+LEFT JOIN __OLD__.structures su ON su.id = u.id_structure
 LEFT JOIN (SELECT MIN(p.id) AS id, p.id_delegation FROM __OLD__.provinces p
            WHERE EXISTS (SELECT 1 FROM __NEW__.province np WHERE np.id = p.id) GROUP BY p.id_delegation) pv
        ON pv.id_delegation = u.id_structure
