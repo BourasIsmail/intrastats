@@ -53,8 +53,6 @@ fi
 
 echo "→ Import : $OLD ⇒ $NEW"
 sub "$DIR/01_import.sql" | "${MYSQL[@]}"
-echo "→ Découpage régional (régions des provinces)"
-sub "$DIR/01c_decoupage_regional.sql" | "${MYSQL[@]}"
 if [[ $STATS -eq 1 ]]; then
   echo "→ Périodes et statistiques"
   sub "$DIR/01b_statistiques.sql" | "${MYSQL[@]}"

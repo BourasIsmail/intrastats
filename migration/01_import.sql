@@ -39,25 +39,29 @@ FROM (SELECT g.*, ROW_NUMBER() OVER (PARTITION BY g.id ORDER BY CHAR_LENGTH(g.re
       FROM __OLD__.regions_nv g WHERE g.id > 0) r
 WHERE r.rn = 1 AND TRIM(r.region) <> '';
 
--- Région d'une province : provinces.id_region n'est pas renseigné dans l'ancienne base. On la déduit de la structure :
--- délégation (provinces.id_delegation) -> coordination régionale (structures.id_parent) -> regions_nv.id_coordination.
--- Cette déduction suit l'ancien découpage ; 01c_decoupage_regional.sql la corrige ensuite.
+-- Région et nom arabe d'une province : table delegations (une délégation par province, liée par provinces.id_delegation).
+-- delegations.id_region_nv désigne la région de regions_nv ; delegation_ar est le nom arabe.
+-- (provinces.id_region n'est pas renseigné et suit l'ancien découpage : il n'est pas utilisé.)
 CREATE TEMPORARY TABLE tmp_province_region AS
 SELECT p.id AS province_id,
-       (SELECT MIN(rv.id) FROM __OLD__.regions_nv rv
-        WHERE rv.id_coordination = d.id_parent AND EXISTS (SELECT 1 FROM __NEW__.region nr WHERE nr.id = rv.id)) AS region_id
-FROM __OLD__.provinces p
-LEFT JOIN __OLD__.structures d ON d.id = p.id_delegation;
+       (SELECT d.id_region_nv FROM __OLD__.delegations d
+        WHERE d.id = p.id_delegation AND EXISTS (SELECT 1 FROM __NEW__.region nr WHERE nr.id = d.id_region_nv)) AS region_id,
+       (SELECT NULLIF(TRIM(d.delegation_ar), '') FROM __OLD__.delegations d WHERE d.id = p.id_delegation) AS nom_ar
+FROM __OLD__.provinces p;
 
 INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
-SELECT 'province_sans_region', p.id, CONCAT('province « ', p.province, ' » : région introuvable via la structure ', IFNULL(p.id_delegation, 'NULL'), ', non migrée')
+SELECT 'province_sans_region', p.id, CONCAT('province « ', p.province, ' » : aucune délégation avec une région valide pour id_delegation ', IFNULL(p.id_delegation, 'NULL'), ', non migrée')
 FROM __OLD__.provinces p JOIN tmp_province_region t ON t.province_id = p.id
 WHERE t.region_id IS NULL;
 
-INSERT INTO __NEW__.province (id, nom_fr, region_id)
-SELECT p.id, TRIM(p.province), t.region_id
+INSERT INTO __NEW__.province (id, nom_fr, nom_ar, region_id)
+SELECT p.id, TRIM(p.province), t.nom_ar, t.region_id
 FROM __OLD__.provinces p JOIN tmp_province_region t ON t.province_id = p.id
 WHERE p.province IS NOT NULL AND TRIM(p.province) <> '' AND t.region_id IS NOT NULL;
+
+-- Noms abîmés par l'ancien encodage (accents perdus dans l'export examiné).
+UPDATE __NEW__.province SET nom_fr = 'Salé' WHERE id = 46 AND nom_fr = 'Sal';
+UPDATE __NEW__.province SET nom_fr = 'Béni Mellal' WHERE id = 56 AND nom_fr LIKE 'B_ni Mellal';
 
 INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
 SELECT 'commune_sans_province', c.id, CONCAT('commune « ', c.commune, ' » : province ', IFNULL(c.id_province, 'NULL'), ' absente, non migrée')

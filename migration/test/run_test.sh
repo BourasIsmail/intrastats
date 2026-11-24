@@ -84,7 +84,8 @@ echo "→ Migration sans statistiques (comportement par défaut)"
 check "sans --avec-statistiques : aucune période"          "0" "SELECT COUNT(*) FROM $NEW.periode"
 check "sans --avec-statistiques : aucune statistique"      "0" "SELECT COUNT(*) FROM $NEW.statistique"
 check "sans --avec-statistiques : centres toujours migrés" "4" "SELECT COUNT(*) FROM $NEW.centre"
-check "région déduite de la structure (Fès)"               "2" "SELECT region_id FROM $NEW.province WHERE id = 4"
+check "région lue dans delegations (Fès)"                  "2" "SELECT region_id FROM $NEW.province WHERE id = 4"
+check "nom arabe de la province repris de delegations"      "سلا" "SELECT nom_ar FROM $NEW.province WHERE id = 2"
 
 "${MYSQL[@]}" -e "DROP DATABASE $OLD; DROP DATABASE $NEW;"
 if [[ $fail -eq 0 ]]; then echo "→ Tous les contrôles passent."; else echo "→ Des contrôles échouent."; exit 1; fi

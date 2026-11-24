@@ -12,6 +12,9 @@ USE __OLD__;
 CREATE TABLE regions_nv (
   id int NOT NULL DEFAULT 0, region varchar(255), region_ar varchar(255),
   id_coordination int NOT NULL DEFAULT 0, id_delegation_chef int NOT NULL DEFAULT 0);
+CREATE TABLE delegations (
+  id int NOT NULL DEFAULT 0, delegation varchar(40), delegation_ar varchar(120) NOT NULL, id_region int, id_region_nv int NOT NULL,
+  delegation_fr varchar(120) NOT NULL, delegation_arr varchar(120) NOT NULL);
 CREATE TABLE provinces (
   id int NOT NULL AUTO_INCREMENT PRIMARY KEY, province varchar(30), id_delegation int, id_region int,
   ind_pauvr decimal(5,2) NOT NULL, ind_vuln decimal(5,2) NOT NULL, ind_vol_pauvr decimal(5,2) NOT NULL, ind_sev_pauvr decimal(5,2) NOT NULL);
@@ -89,6 +92,9 @@ INSERT INTO regions_nv (id, region, region_ar, id_coordination) VALUES
   (2, 'Fès-Meknès', 'فاس مكناس', 901);
 INSERT INTO provinces (id, province, id_delegation, id_region) VALUES
   (1, 'Rabat', 100, 1), (2, 'Salé', 101, 1), (3, 'Kénitra', 102, 1), (4, 'Fès', 103, 2), (5, 'Orpheline', 104, 99);  -- 5 : région inconnue
+INSERT INTO delegations (id, delegation, delegation_ar, id_region, id_region_nv, delegation_fr, delegation_arr) VALUES
+  (100, 'Rabat', 'الرباط', 12, 1, 'Préfecture: Rabat', ''), (101, 'Salé', 'سلا', 12, 1, 'Préfecture: Salé', ''),
+  (102, 'Kénitra', 'القنيطرة', 12, 1, 'Province: Kénitra', ''), (103, 'Fès', 'فاس', 3, 2, 'Préfecture: Fès', '');
 INSERT INTO communes (id, commune, id_province, INDH, longitude, latitude, code_arcgis) VALUES
   (1, 'Rabat', 1, 'N', -6.84160000, 34.02090000, 1001),
   (2, 'Salé', 2, 'N', -6.79810000, 34.05310000, 1002),

@@ -36,7 +36,7 @@ done
 
 echo "→ Vérification des tables"
 manquantes=()
-for t in provinces regions_nv structures communes users locaux centres activites activite_centre personnel; do
+for t in provinces regions_nv delegations structures communes users locaux centres activites activite_centre personnel; do
   n=$("${MYSQL[@]}" -N -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$OLD' AND TABLE_NAME='$t'" 2>/dev/null)
   if [[ "$n" == "0" ]]; then manquantes+=("$t"); else
     lignes=$("${MYSQL[@]}" -N -e "SELECT COUNT(*) FROM \`$OLD\`.\`$t\`" 2>/dev/null)
