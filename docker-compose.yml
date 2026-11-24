@@ -1,0 +1,62 @@
+name: entraide
+
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: entraide
+      MYSQL_USER: entraide
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Définissez DB_PASSWORD dans .env}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Définissez DB_ROOT_PASSWORD dans .env}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:mysql://db:3306/entraide?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
+      DB_USER: entraide
+      DB_PASSWORD: ${DB_PASSWORD}
+      APP_JWT_SECRET: ${APP_JWT_SECRET:?Définissez APP_JWT_SECRET (32 caractères minimum) dans .env}
+      APP_COOKIE_SECURE: ${APP_COOKIE_SECURE:-true}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8080'"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        API_URL: http://api:8080
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  proxy:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+      - web
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  db-data:

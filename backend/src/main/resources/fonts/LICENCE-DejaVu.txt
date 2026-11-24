@@ -1,0 +1,3 @@
+DejaVu Sans : police libre (licence Bitstream Vera / domaine public pour les ajouts DejaVu),
+redistribuable librement, y compris dans un logiciel commercial. Source : https://dejavu-fonts.github.io/
+Utilisée pour afficher les noms arabes dans les exports PDF.
