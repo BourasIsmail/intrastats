@@ -81,6 +81,10 @@ SELECT 'local_non_centre', l.id, CONCAT('local « ', l.nom, ' » (', l.categorie
 FROM __OLD__.locaux l WHERE NOT EXISTS (SELECT 1 FROM __OLD__.centres c WHERE c.id = l.id);
 
 INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
+SELECT 'centre_sans_local', c.id, CONCAT('ligne de « centres » sans local correspondant (type « ', IFNULL(c.type, ''), ' ») : ni nom ni province, non migré')
+FROM __OLD__.centres c WHERE NOT EXISTS (SELECT 1 FROM __OLD__.locaux l WHERE l.id = c.id);
+
+INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
 SELECT 'centre_sans_province', l.id, CONCAT('centre « ', l.nom, ' » : province ', l.id_province, ' absente, non migré')
 FROM __OLD__.locaux l JOIN __OLD__.centres c ON c.id = l.id
 WHERE NOT EXISTS (SELECT 1 FROM __NEW__.province p WHERE p.id = l.id_province);
@@ -236,6 +240,20 @@ FROM tmp_activite_centre t
 WHERE t.id_responsable IS NOT NULL AND t.id_responsable <> 0
   AND NOT EXISTS (SELECT 1 FROM __NEW__.personnel pe WHERE pe.id = t.id_responsable);
 
+-- Incohérences de l'ancienne base, corrigées ci-dessous et comptées ici (une ligne de rapport par catégorie).
+INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
+SELECT 'activite_fermee_sans_date', COUNT(*), 'activités fermées sans date de cessation valide : date de saisie utilisée (ou date du jour)'
+FROM tmp_activite_centre t WHERE LOWER(t.etat) LIKE 'ferm%' AND NOT (t.date_cessation >= '1990-01-01' AND t.date_cessation < '2200-01-01') HAVING COUNT(*) > 0;
+INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
+SELECT 'activite_ouverte_avec_date', COUNT(*), 'activités « Ouvert » portant une date de cessation : l''état fait foi, activité laissée ouverte'
+FROM tmp_activite_centre t WHERE LOWER(t.etat) LIKE 'ouver%' AND t.date_cessation >= '1990-01-01' AND t.date_cessation < '2200-01-01' HAVING COUNT(*) > 0;
+INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
+SELECT 'date_ouverture_inconnue', COUNT(*), 'activités sans date d''ouverture valide : 01/01/1970 utilisée, à corriger dans l''application'
+FROM tmp_activite_centre t WHERE NOT (t.date_ouvert_act >= '1990-01-01') HAVING COUNT(*) > 0;
+INSERT INTO __NEW__.migration_rapport (categorie, ancien_id, detail)
+SELECT 'convention_sans_association', COUNT(*), 'dates de convention sans association : date non reprise'
+FROM tmp_activite_centre t WHERE t.date_conv >= '1990-01-01' AND TRIM(t.association) = '' AND TRIM(t.association2) = '' HAVING COUNT(*) > 0;
+
 -- gestion : liste Entraide Nationale / Association / Cogestion / Autre ; toute autre valeur devient « Autre » avec le texte d'origine.
 INSERT INTO __NEW__.centre_activite (centre_id, activite_id, responsable_id, capacite, superficie, date_ouverture, date_cessation,
                                      motif_cessation, gestion, gestion_autre, partenaire, date_convention)
@@ -243,7 +261,12 @@ SELECT t.id_centre, t.id_activite,
        (SELECT pe.id FROM __NEW__.personnel pe WHERE pe.id = t.id_responsable),
        NULLIF(t.capacite, 0), NULLIF(t.superficie, 0),
        CASE WHEN t.date_ouvert_act >= '1990-01-01' THEN DATE(t.date_ouvert_act) ELSE DATE '1970-01-01' END,
-       CASE WHEN t.date_cessation >= '1990-01-01' AND t.date_cessation < '2200-01-01' THEN t.date_cessation END,
+       -- L'état (Ouvert / Fermé) fait foi : fermé sans date valide -> date de saisie ; ouvert -> pas de date de cessation.
+       CASE WHEN LOWER(t.etat) LIKE 'ferm%' THEN
+                 COALESCE(CASE WHEN t.date_cessation >= '1990-01-01' AND t.date_cessation < '2200-01-01' THEN t.date_cessation END,
+                          CASE WHEN t.date_saisie >= '1990-01-01' THEN t.date_saisie END, CURDATE())
+            WHEN LOWER(t.etat) LIKE 'ouver%' THEN NULL
+            ELSE CASE WHEN t.date_cessation >= '1990-01-01' AND t.date_cessation < '2200-01-01' THEN t.date_cessation END END,
        NULLIF(TRIM(t.motif), ''),
        CASE WHEN TRIM(t.gestion) = '' THEN NULL
             WHEN LOWER(t.gestion) LIKE '%entraide%' THEN 'ENTRAIDE_NATIONALE'

@@ -29,7 +29,8 @@ Scripts SQL qui reprennent l'ancienne base (`locaux`, `centres`, `regions`, `pro
 | `regions`, `provinces`, `communes` | Identifiants conservés. Doublons d'identifiant écartés, provinces sans région et communes sans province listées. Coordonnées à 0 ou hors bornes remplacées par `NULL`. Code ArcGIS en double non repris. |
 | `locaux` + `centres` | Seuls les locaux qui ont une ligne dans `centres` sont repris (les autres sont listés). Codes vides ou en double corrigés (`C-<id>`, `<code>-<id>`). Dates `0000-00-00` deviennent `NULL`. Coordonnées : `latitude/longitude`, sinon `latitu/longit`. Foncier et équipements dans leurs tables. |
 | `activites` | Hiérarchie reconstruite à partir des textes (`programme`, `axe`, `categorie2`) ; valeurs vides = « Non classé ». |
-| `activite_centre` | Une ligne par (centre, activité), la plus récente ; `2222-12-31` devient `NULL` ; `salle1..6` deviennent des lignes `salle`. |
+| `activite_centre` | Une ligne par (centre, activité), la plus récente. **L'état (Ouvert / Fermé) fait foi** : fermé sans date valide → date de saisie ; ouvert → pas de date de cessation ; `2222-12-31` devient `NULL`. Reprend responsable (`id_responsable` → `personnel`), superficie, gestion (Entraide Nationale, Association, Cogestion ; autre valeur → « Autre » avec le texte d'origine), association et date de convention. `salle1..6` deviennent des lignes `salle`. |
+| `personnel` | Identifiants conservés. Province = celle du centre (`id_local`), sinon celle dont la structure est la délégation (`id_structure`) ; sans province ou sans nom : non migré et listé. Dates invalides → `NULL`, enfants bornés à 30. Non repris : `som`, `verif`, `verif1`, `prov`, `id_str2`, `id_activite`. |
 | `periodicites` | Périodes invalides écartées, doublons (année, mois) fusionnés. **Une seule période reste ouverte** (la plus récente). |
 | `statistiques` | Rattachées par (centre, activité, période). Lignes `test = 1` écartées. Valeurs hors bornes reprises mais listées. Etat du centre converti. |
 | (déduit) | `saisie_province` : `VALIDE` pour les périodes clôturées (historique), `BROUILLON` pour la période ouverte. |
@@ -54,6 +55,17 @@ Ces points sont des hypothèses faites faute d'avoir vu les données :
 3. La valeur « admin » dans `users.type` (sinon aucun compte ADMIN n'est reconnu : en créer un dans l'application).
 4. Le lien `users.id_structure` → `provinces.id_delegation` / `regions.id_coordination`.
 5. Les locaux migrés sont ceux présents dans `centres` ; les autres (sièges, délégations) sont exclus.
+6. `activite_centre.id_responsable` désigne un `personnel.id` (vérifié sur un extrait réel : 80 % des valeurs existent dans l'extrait de `personnel` fourni).
+
+### Constats sur un extrait réel (tables `locaux`, `centres`, `activites`, `activite_centre`, `personnel`)
+
+Essai fait avec un territoire synthétique (les tables `regions`, `provinces`, `communes`, `structures`, `users`, `periodicites`, `statistiques` n'avaient pas été fournies). Durée : environ 1,5 s. À refaire avec la base complète.
+
+- `centres` contient 437 lignes sans `locaux` correspondant (ni nom, ni province) : non migrées, listées (`centre_sans_local`).
+- 143 locaux ont `id_province = 0` : non migrés (`centre_sans_province`) ; avec les précédents, 243 liaisons centre-activité sont écartées (`activite_centre_orpheline`).
+- `locaux.code` n'est pas un code unique : 3 243 valeurs vides, beaucoup de doublons, des valeurs comme `100000` ou `0`. Presque tous les centres reçoivent donc un code généré (`C-<id>`). Il faut décider de quoi faire de ce champ.
+- Dans `activite_centre.etat`, « Fermé » apparaît sous les formes `Ferme`, `Ferm&eacute;` (tronqué en `Ferm&ea`), `Fermer` : toutes reconnues par le préfixe `ferm`.
+- Quelques incohérences état / date de cessation sont corrigées et comptées dans le rapport (`activite_fermee_sans_date`, `activite_ouverte_avec_date`, `date_ouverture_inconnue`, `convention_sans_association`).
 
 ## Test
 
